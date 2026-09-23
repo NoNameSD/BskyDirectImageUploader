@@ -1,3 +1,4 @@
+import time
 import sys
 import os
 import json
@@ -53,34 +54,35 @@ def build_rich_text_facets(text_content):
 def main():
     # Verify that the JSON bridge payload path was provided
     if len(sys.argv) < 2:
-        print("[ERROR] Missing JSON bridge payload path.")
+        print("[ERROR] Missing JSON bridge payload path.", file=sys.stderr)
         sys.exit(1)
         
-    # FIXED: Grab index [1] from sys.argv instead of the entire list object
     json_path = sys.argv[1]
     
     if not os.path.exists(json_path):
-        print(f"[ERROR] Bridge payload file not found: {json_path}")
+        print(f"[ERROR] Bridge payload file not found: {json_path}", file=sys.stderr)
         sys.exit(1)
 
     with open(json_path, "r", encoding="utf-8-sig") as f:
         data = json.load(f)
 
-    HANDLE = data.get("handle")
-    APP_PASSWORD = data.get("password")
-    post_text = data.get("text")
-    # FIXED: Ensure post_text is a valid string, even if PowerShell sent an empty value
+    print("Read payload", file=sys.stdout)
+
+    HANDLE: str = data.get("handle")
+    APP_PASSWORD: str = data.get("password")
+    post_text: str | None = data.get("text")
+    # Ensure post_text is a valid string, even if an empty value was sent
     if post_text is None:
         post_text = ""
-    reply_url = data.get("reply_url")
-    label_list = data.get("labels", [])
-    images_list = data.get("images", [])
+    reply_url: str | None = data.get("reply_url")
+    label_list: list = data.get("labels", [])
+    images_list: list[dict] = data.get("images", [])
 
     client = Client()
     try:
         client.login(HANDLE, APP_PASSWORD)
     except Exception as e:
-        print(f"[CRITICAL ERROR] Login failed: {e}")
+        print(f"[CRITICAL ERROR] Login failed: {e}", file=sys.stderr)
         sys.exit(1)
 
     print("Parsing text caption for interactive hashtags and web links...")
@@ -92,20 +94,56 @@ def main():
         images_list = [images_list]
 
     for img_item in images_list:
-        path = img_item.get("path")
-        alt_text = img_item.get("alt", "")
+        path: str = img_item.get("path")
+        filename: str = os.path.basename(path)
+        alt_text: str | None = img_item.get("alt", "")
 
-        print(f"Uploading pristine raw bytes for: {path}")
+        # Ensure alt_text is a valid string, even if an empty value was sent
+        if alt_text is None:
+            alt_text = ""
+
+        # Read provided image dimensions
+        width: int | None = None
+        height: int | None = None
+        try:
+            dimensions = img_item["dimensions"]
+            try:
+                width = dimensions["width"]
+            except KeyError:
+                print(f"[WARNING] No image width provided for: {filename}")
+            try:
+                height = dimensions["height"]
+            except KeyError:
+                print(f"[WARNING] No image height provided for: {filename}")
+        except KeyError:
+            print(f"[WARNING] No image dimensions provided for: {filename}")
+
+        if width is None:
+            width = 1000
+            print(f"Using fallback value {width} for width")
+
+        if height is None:
+            height = 1000
+            print(f"Using fallback value {height} for height")
+
+        print(f"Uploading raw bytes for: {filename}")
         try:
             with open(path, "rb") as f:
                 img_data = f.read()
             upload = client.upload_blob(img_data)
-            images_embed.append(models.AppBskyEmbedImages.Image(alt=alt_text, image=upload.blob))
+
+            images_embed.append(models.AppBskyEmbedGallery.Image(alt=alt_text, image=upload.blob, aspectRatio=models.AppBskyEmbedDefs.AspectRatio(width=width, height=height) ))
         except Exception as e:
-            print(f"[CRITICAL ERROR] Image upload failed for {path}: {e}")
+            print(f"[CRITICAL ERROR] Image upload failed for {path}: {e}", file=sys.stderr)
             sys.exit(1)
 
-    embed = models.AppBskyEmbedImages.Main(images=images_embed) if images_embed else None
+    print(f"Embedding images")
+    try:
+        embed = models.AppBskyEmbedGallery.Main(items=images_embed) if images_embed else None
+
+    except Exception as e:
+        print(f"[CRITICAL ERROR] Image embed failed: {e}", file=sys.stderr)
+        sys.exit(1)
 
     # Handle Thread-Reply mapping
     reply_to = None
@@ -125,7 +163,7 @@ def main():
                 root=models.ComAtprotoRepoStrongRef.Main(cid=root_cid, uri=root_uri)
             )
         except Exception as e:
-            print(f"\n[CRITICAL ERROR] Failed to resolve reply thread: {e}")
+            print(f"\n[CRITICAL ERROR] Failed to resolve reply thread: {e}", file=sys.stderr)
             sys.exit(1)
 
     # Build Content Warning System Labels
@@ -153,9 +191,9 @@ def main():
                 record=post_record
             )
         )
-        print("Successfully posted to Bluesky with functioning hashtags!")
+        print("Successfully posted to Bluesky!")
     except Exception as e:
-        print(f"\n[CRITICAL SERVER REJECTION] The Bluesky PDS network rejected this post payload: {e}")
+        print(f"\n[CRITICAL SERVER REJECTION] The Bluesky PDS network rejected this post payload: {e}", file=sys.stderr)
         sys.exit(1)
 
 if __name__ == "__main__":
