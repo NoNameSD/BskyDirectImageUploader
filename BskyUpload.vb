@@ -383,7 +383,7 @@ Namespace Bdiu
         End Function
 
         Public Class EmbeddedGalleryEdit
-                Inherits idunno.Bluesky.Embed.EmbeddedGallery
+            Inherits idunno.Bluesky.Embed.EmbeddedGallery
 
             Public Sub New(original As idunno.Bluesky.Embed.EmbeddedGallery)
                 MyBase.New(original)
@@ -406,14 +406,14 @@ Namespace Bdiu
             End Sub
         End Class
 
-            Public Class BlueskyException
-                Inherits Exception
+        Public Class BlueskyException
+            Inherits Exception
 
             Public Property StatusCode As System.Net.HttpStatusCode
 
             Public Sub New(message As String)
-                    MyBase.New(message)
-                End Sub
+                MyBase.New(message)
+            End Sub
 
             Public Sub New(message As String, statusCode As System.Net.HttpStatusCode)
                 MyBase.New($"{message} (HTTP Status: {statusCode})")
@@ -421,16 +421,16 @@ Namespace Bdiu
             End Sub
 
             Public Sub New(message As String, innerException As Exception)
-                    MyBase.New(message, innerException)
-                End Sub
-            End Class
+                MyBase.New(message, innerException)
+            End Sub
+        End Class
 
-            Public Class BlueskyPostCreateException
-                Inherits BlueskyException
+        Public Class BlueskyPostCreateException
+            Inherits BlueskyException
 
-                Public Sub New(message As String)
-                    MyBase.New(message)
-                End Sub
+            Public Sub New(message As String)
+                MyBase.New(message)
+            End Sub
 
             Public Sub New(message As String, statusCode As System.Net.HttpStatusCode)
                 MyBase.New($"{message} (HTTP Status: {statusCode})")
@@ -438,16 +438,16 @@ Namespace Bdiu
             End Sub
 
             Public Sub New(message As String, innerException As Exception)
-                    MyBase.New(message, innerException)
-                End Sub
-            End Class
+                MyBase.New(message, innerException)
+            End Sub
+        End Class
 
-            Public Class BlueskyImageUploadException
-                Inherits BlueskyException
+        Public Class BlueskyImageUploadException
+            Inherits BlueskyException
 
-                Public Sub New(message As String)
-                    MyBase.New(message)
-                End Sub
+            Public Sub New(message As String)
+                MyBase.New(message)
+            End Sub
 
             Public Sub New(message As String, statusCode As System.Net.HttpStatusCode)
                 MyBase.New($"{message} (HTTP Status: {statusCode})")
@@ -455,16 +455,16 @@ Namespace Bdiu
             End Sub
 
             Public Sub New(message As String, innerException As Exception)
-                    MyBase.New(message, innerException)
-                End Sub
-            End Class
+                MyBase.New(message, innerException)
+            End Sub
+        End Class
 
-            Public Class BlueskyLoginException
-                Inherits BlueskyException
+        Public Class BlueskyLoginException
+            Inherits BlueskyException
 
-                Public Sub New(message As String)
-                    MyBase.New(message)
-                End Sub
+            Public Sub New(message As String)
+                MyBase.New(message)
+            End Sub
 
             Public Sub New(message As String, statusCode As System.Net.HttpStatusCode)
                 MyBase.New($"{message} (HTTP Status: {statusCode})")
