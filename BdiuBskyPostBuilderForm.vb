@@ -1,7 +1,5 @@
 ﻿#Disable Warning IDE1006 ' Naming Styles
 
-#Const UseIdunnoBsky = True
-
 Public Class BdiuBskyPostBuilderForm
 
     Const BskyMaxImageSize As Long = 2000000
@@ -11,9 +9,6 @@ Public Class BdiuBskyPostBuilderForm
     Private postData As New Bdiu.BskyUploadPostData
 
     Friend Event WarningLabelsUpdated()
-
-    <System.ComponentModel.DesignerSerializationVisibility(System.ComponentModel.DesignerSerializationVisibility.Content)>
-    Private WithEvents BskyUpl As Bdiu.BskyUploadPy
 
     <System.ComponentModel.DesignerSerializationVisibility(System.ComponentModel.DesignerSerializationVisibility.Content)>
     Private WithEvents OxiPngOptInt As Bdiu.OxiPngOptimize
@@ -98,14 +93,6 @@ Public Class BdiuBskyPostBuilderForm
     Private Sub OxiPngOpt_ProcessDataReceived(sender As Object, data As String, isErrorData As Boolean) Handles OxiPngOptInt.ProcessDataReceived
         Call AddToLog(data, isErrorData)
     End Sub
-    Private Sub BskyUploadPy_ProcessDataReceived(sender As Object, data As String, isErrorData As Boolean) Handles BskyUpl.ProcessDataReceived
-        If data IsNot Nothing AndAlso data.StartsWith("[WARNING]", StringComparison.Ordinal) Then
-            Call AddToLog(data, Bdiu.BdiuHelper.ColorWarning)
-        Else
-            Call AddToLog(data, isErrorData)
-        End If
-    End Sub
-
     Private Sub BskyUpload_ProcessDataReceived(sender As Object, data As String, isErrorData As Boolean)
         Call AddToLog(data, isErrorData)
     End Sub
@@ -322,7 +309,7 @@ Public Class BdiuBskyPostBuilderForm
 
             ' Helper class to build the unified payload dictionary for the JSON file
             Dim payload As New Bdiu.BskyUploadPayload(bskyHandle:=handle, bskyPasswordEncrypted:=encryptedPassword, bskyPost:=postData)
-#If UseIdunnoBsky Then
+
             ' Post the data to Bluesky
             Try
                 AddHandler payload.ProcessDataReceived, AddressOf BskyUpload_ProcessDataReceived
@@ -333,25 +320,6 @@ Public Class BdiuBskyPostBuilderForm
             Catch ex As System.Security.Cryptography.CryptographicException
                 Call MsgBox($"Error decrypting the Bluesky App Password.{Environment.NewLine}Access credentials must be re-entered.", MsgBoxStyle.Exclamation, "Decryption Error")
                 Call PromptCredentialsInput()
-#Else
-            Dim PayloadData = payload.PayloadData
-
-            ' Fire the external Python pipeline process
-            Try
-                BskyUpl = New Bdiu.BskyUploadPy
-                Await BskyUpl.UploadToBsky(payload.PayloadData, _cts.Token)
-
-                If BskyUpl.ProcessExitCode.HasValue Then
-                    If BskyUpl.ProcessExitCode.Value <> 0 Then
-                        MessageBox.Show($"Python Pipeline Failed.{Environment.NewLine}See Log for error data.", "Server Rejection", MessageBoxButtons.OK, MessageBoxIcon.Error)
-                    Else
-                        MessageBox.Show("Successfully posted to Bluesky uncompressed!", "Success", MessageBoxButtons.OK, MessageBoxIcon.Information)
-                    End If
-                End If
-            Catch ex As System.Security.Cryptography.CryptographicException
-                Call MsgBox($"Error decrypting the Bluesky App Password.{Environment.NewLine}Access credentials must be re-entered.", MsgBoxStyle.Exclamation, "Decryption Error")
-                Call PromptCredentialsInput()
-#End If
             Catch ex As OperationCanceledException
                 Call AddToLog("Process aborted by user.", Color.DarkMagenta)
             Catch ex As BskyDirectImageUploader.Bdiu.BskyUploadPayload.BlueskyException
