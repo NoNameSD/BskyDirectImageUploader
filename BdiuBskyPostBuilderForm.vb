@@ -1,8 +1,6 @@
-﻿Imports System.Globalization
-Imports System.IO
-Imports System.Text
-Imports System.Threading
-#Disable Warning IDE1006 ' Naming Styles
+﻿#Disable Warning IDE1006 ' Naming Styles
+
+#Const UseIdunnoBsky = True
 
 Public Class BdiuBskyPostBuilderForm
 
@@ -28,7 +26,7 @@ Public Class BdiuBskyPostBuilderForm
             OxiPngOptInt = value
         End Set
     End Property
-    Private _cts As CancellationTokenSource
+    Private _cts As System.Threading.CancellationTokenSource
 
     Private Sub BskyPostBuilder_Load(sender As Object, e As EventArgs) Handles MyBase.Load
         Me.ucLog.Logger = New Logger.Logger(Byte.MaxValue)
@@ -37,11 +35,64 @@ Public Class BdiuBskyPostBuilderForm
         ' Check if we received images directly via Windows Drag & Drop onto the .exe icon
         Dim args As String() = Environment.GetCommandLineArgs()
         If args.Length > 1 Then
-            Call AddImagesSecurely(args)
+            Call AddImagesSecurely(args, True)
         End If
 
         Call Me.UpdateCharCount()
         Call Me.SetImageDataOnForm()
+        RemoveHandler cboLanguageAdd.SelectedIndexChanged, AddressOf cboLanguageAdd_SelectedIndexChanged
+        Call Me.SetLanguageBoxData()
+        Call Me.RefreshLanguageTextBox()
+        AddHandler cboLanguageAdd.SelectedIndexChanged, AddressOf cboLanguageAdd_SelectedIndexChanged
+
+        Me.cmbSetDateFromAttachType.Text = "Created"
+        Me.btnSetCreatedAtByAttachments.Checked = True
+        Call RefreshCreatedAtBox()
+    End Sub
+
+    ''' <summary>
+    ''' Bind list of all cultures (with LanguageId) installed on the machine to the Language combo box
+    ''' </summary>
+    Private Sub SetLanguageBoxData()
+        Me.cboLanguageAdd.DataSource = Bdiu.LanguageItem.GetLanguageList
+        Me.cboLanguageAdd.DisplayMember = "DisplayName" ' What the user sees
+        Me.cboLanguageAdd.ValueMember = "Bcp47Tag"      ' The actual BCP-47 code stored behind it
+        Call Me.SetSystemLanguageAsDefault()
+    End Sub
+
+    Private Sub SetSystemLanguageAsDefault()
+        ' PRESELECT THE SYSTEM LANGUAGE 
+        ' Get the current Windows UI BCP-47 language tag (e.g., "en-US")
+        Dim systemLanguage As String = System.Globalization.CultureInfo.CurrentUICulture.Name
+
+        Me.postData.AddLanguage(systemLanguage)
+
+        ' Assign it to SelectedValue. If it exists in your whitelist, it auto-selects.
+        Me.cboLanguageAdd.SelectedValue = systemLanguage
+
+        Dim languageList = DirectCast(Me.cboLanguageAdd.DataSource, List(Of BskyDirectImageUploader.Bdiu.LanguageItem))
+
+        ' Fallback: If the exact system language isn't in the list (Shouldnt happen, as all installed languages are in the list)
+        If cboLanguageAdd.SelectedValue Is Nothing AndAlso systemLanguage.Contains("-"c) Then
+            Dim baseLanguage As String = systemLanguage.Split("-"c)(0) ' Extracts "en" from "en-CA"
+
+            ' Look for an item in your list that starts with that base language
+            Dim fallbackItem = languageList.FirstOrDefault(Function(x) x.Bcp47Tag.StartsWith(baseLanguage, StringComparison.OrdinalIgnoreCase))
+
+            If fallbackItem IsNot Nothing Then
+                Me.cboLanguageAdd.SelectedValue = fallbackItem.Bcp47Tag
+            End If
+        End If
+
+        ' Fallback to english if even that is not found
+        If cboLanguageAdd.SelectedValue Is Nothing Then
+
+            Dim fallbackItem = languageList.FirstOrDefault(Function(x) x.Bcp47Tag.StartsWith("en", StringComparison.OrdinalIgnoreCase))
+
+            If fallbackItem IsNot Nothing Then
+                Me.cboLanguageAdd.SelectedValue = fallbackItem.Bcp47Tag
+            End If
+        End If
     End Sub
 
     Private Sub OxiPngOpt_ProcessDataReceived(sender As Object, data As String, isErrorData As Boolean) Handles OxiPngOptInt.ProcessDataReceived
@@ -53,6 +104,10 @@ Public Class BdiuBskyPostBuilderForm
         Else
             Call AddToLog(data, isErrorData)
         End If
+    End Sub
+
+    Private Sub BskyUpload_ProcessDataReceived(sender As Object, data As String, isErrorData As Boolean)
+        Call AddToLog(data, isErrorData)
     End Sub
 
     Private Sub AddToLog(text As String, isError As Boolean)
@@ -73,7 +128,7 @@ Public Class BdiuBskyPostBuilderForm
 
     Private Sub BskyPostBuilder_DragDrop(sender As Object, e As DragEventArgs) Handles Me.DragDrop
         Dim files As String() = CType(e.Data.GetData(DataFormats.FileDrop), String())
-        Call AddImagesSecurely(files)
+        Call AddImagesSecurely(files, False)
     End Sub
 
     Private Sub RemoveAllImages()
@@ -83,17 +138,18 @@ Public Class BdiuBskyPostBuilderForm
         Call lstImages.Items.Clear()
         Me.txtAltText.Text = Nothing
         Me.txtAltText.Enabled = False
-    End Sub
-
-    Private Sub AddImagesSecurely(paths() As String)
-        Call AddImagesSecurely(paths, True)
+        Me.txtMimeType.Text = Nothing
+        Me.txtMimeType.Enabled = False
+        Call Me.ClearImageDimensionsNud()
+        Me.nudWidth.Enabled = False
+        Me.nudHeight.Enabled = False
     End Sub
 
     Private Sub AddImagesSecurely(paths() As String, onlyAllowSafeFileTypesToAdd As Boolean)
         For Each path In paths
 
-            Dim ext As String = IO.Path.GetExtension(Path).ToLower()
-            Dim fileName As String = IO.Path.GetFileName(Path)
+            Dim ext As String = IO.Path.GetExtension(path).ToLower()
+            Dim fileName As String = IO.Path.GetFileName(path)
 
             If onlyAllowSafeFileTypesToAdd Then
                 Dim allowedExts As String() = {".png", ".jpg", ".jpeg", ".jfif", ".webp", ".avif"}
@@ -102,7 +158,7 @@ Public Class BdiuBskyPostBuilderForm
             End If
 
             ' Strict 2MB Server limit verification
-            Dim fileInfo As New FileInfo(Path)
+            Dim fileInfo As New System.IO.FileInfo(path)
             If fileInfo.Length > BskyMaxImageSize Then
                 Dim messageText As String = $"The file '{fileInfo.Name}' is too large!{Environment.NewLine}({Math.Round(fileInfo.Length / 1000 / 1000, 2)} MB / {Math.Round(fileInfo.Length / 1024 / 1024, 2)} MiB){Environment.NewLine}{Environment.NewLine}Bluesky limits uncompressed blobs to {Math.Round(BskyMaxImageSize / 1000 / 1000, 2)} MB / {Math.Round(BskyMaxImageSize / 1024 / 1024, 2)} MiB.{Environment.NewLine}{Environment.NewLine}Add the image regardless?"
 
@@ -132,12 +188,11 @@ Public Class BdiuBskyPostBuilderForm
             End If
 
             ' Add to new image data object
-            Dim imgData As New Bdiu.BskyUploadPostData.BskyUploadImageData(filePath:=Path)
+            Dim imgData As New Bdiu.BskyUploadPostData.BskyUploadImageData(filePath:=path)
 
-            ' Get the image dimensions of the file
-            ' The app.bsky.embed.gallery schema strictly requires this data
+            ' Get the image dimensions and mimetype of the file
             Try
-                Call imgData.LoadImageDimensions()
+                Call imgData.LoadImageData()
             Catch ex As Exception
                 ' Ignore exceptions when reading the image metadata
             End Try
@@ -149,10 +204,16 @@ Public Class BdiuBskyPostBuilderForm
             Else
                 Call Me.AddToLog($"Warning: No image dimensions read from {fileName}", Bdiu.BdiuHelper.ColorWarning)
             End If
+            If String.IsNullOrWhiteSpace(imgData.MimeType) Then
+                Call Me.AddToLog($"Warning: No MIME-Type read from {fileName}", Bdiu.BdiuHelper.ColorWarning)
+            Else
+                Call Me.AddToLog($"Read MIME-Type {imgData.MimeType} from {fileName}", False)
+            End If
 
             ' Image list displayed to user
             Call lstImages.Items.Add(fileName)
         Next
+        Call Me.RefreshCreatedAtBox()
     End Sub
 
     ' Real-time Live Character Counter (300 limit)
@@ -169,7 +230,7 @@ Public Class BdiuBskyPostBuilderForm
 
         ' 1. Count Grapheme Clusters (Visual characters like Bluesky)
         ' Use StringInfo to correctly split text by text elements (graphemes)
-        Dim graphemeEnumerator As TextElementEnumerator = StringInfo.GetTextElementEnumerator(text)
+        Dim graphemeEnumerator As System.Globalization.TextElementEnumerator = System.Globalization.StringInfo.GetTextElementEnumerator(text)
         Dim graphemeCount As Integer = 0
 
         While graphemeEnumerator.MoveNext()
@@ -177,7 +238,7 @@ Public Class BdiuBskyPostBuilderForm
         End While
 
         ' 2. Count Bytes (The AT Protocol 3KB safety limit)
-        Dim byteCount As Integer = Encoding.UTF8.GetByteCount(text)
+        Dim byteCount As Integer = System.Text.Encoding.UTF8.GetByteCount(text)
 
         ' 3. Update UI Elements
         lblGraphemeCount.Text = $"Characters: {graphemeCount} / {MaxGraphemes}"
@@ -218,23 +279,22 @@ Public Class BdiuBskyPostBuilderForm
         Me.btnCancel.Enabled = False
     End Sub
 
-    ' Processing and Handover to Python
+    ' Actual process of sending the post data to Bluesky
     Private Async Sub btnSubmit_Click(sender As Object, e As EventArgs) Handles btnSubmit.Click
-        If Me.postData.Images Is Nothing OrElse Me.postData.Images.Count = 0 Then
-            MessageBox.Show("Please add at least one image before posting.", "Missing Assets", MessageBoxButtons.OK, MessageBoxIcon.Warning)
+        If MessageBox.Show(Me, "Send the post data to Bluesky?", "Confirm posting", MessageBoxButtons.YesNo, MessageBoxIcon.Question) <> DialogResult.Yes Then
             Return
         End If
 
         Call Me.DisableFormForProcess()
 
-        _cts = New CancellationTokenSource()
+        _cts = New System.Threading.CancellationTokenSource()
         Using registration = _cts.Token.Register(Sub()
                                                      Call EnableFormAfterProcessFinish()
                                                  End Sub)
             If Me.chkOptPng.Checked Then
-                If Await Me.OptimizePngFiles(_cts.Token) Then
-                    ' OK
-                Else
+                Dim optComplete As Boolean = Await Me.OptimizePngFiles(_cts.Token)
+
+                If Not optComplete Or _cts.IsCancellationRequested Then
                     ' Error or cancelled
                     Call Me.AddToLog("Upload aborted", Color.DarkGray)
                     _cts.Dispose()
@@ -247,8 +307,8 @@ Public Class BdiuBskyPostBuilderForm
             Dim encryptedPassword As Byte() = Nothing
             Try
                 ' Read credentials that were encrypted using Windows DPAPI (tied to current Windows User Account)
-                handle = File.ReadAllText(Bdiu.BdiuHelper.HandleFilePath).Trim()
-                encryptedPassword = File.ReadAllBytes(Bdiu.BdiuHelper.PasswordFilePath)
+                handle = System.IO.File.ReadAllText(Bdiu.BdiuHelper.HandleFilePath).Trim()
+                encryptedPassword = System.IO.File.ReadAllBytes(Bdiu.BdiuHelper.PasswordFilePath)
             Catch ex As Exception
                 Call Bdiu.BDIUExceptionDisplay.DisplayExceptionAsMessageBox(Me, ex)
             End Try
@@ -262,7 +322,18 @@ Public Class BdiuBskyPostBuilderForm
 
             ' Helper class to build the unified payload dictionary for the JSON file
             Dim payload As New Bdiu.BskyUploadPayload(bskyHandle:=handle, bskyPasswordEncrypted:=encryptedPassword, bskyPost:=postData)
+#If UseIdunnoBsky Then
+            ' Post the data to Bluesky
+            Try
+                AddHandler payload.ProcessDataReceived, AddressOf BskyUpload_ProcessDataReceived
+                Await payload.PostToBsky(_cts.Token)
 
+                ' Success if no error is thrown
+                Call MessageBox.Show("Successfully posted to Bluesky!", "Success", MessageBoxButtons.OK, MessageBoxIcon.Information)
+            Catch ex As System.Security.Cryptography.CryptographicException
+                Call MsgBox($"Error decrypting the Bluesky App Password.{Environment.NewLine}Access credentials must be re-entered.", MsgBoxStyle.Exclamation, "Decryption Error")
+                Call PromptCredentialsInput()
+#Else
             Dim PayloadData = payload.PayloadData
 
             ' Fire the external Python pipeline process
@@ -280,13 +351,21 @@ Public Class BdiuBskyPostBuilderForm
             Catch ex As System.Security.Cryptography.CryptographicException
                 Call MsgBox($"Error decrypting the Bluesky App Password.{Environment.NewLine}Access credentials must be re-entered.", MsgBoxStyle.Exclamation, "Decryption Error")
                 Call PromptCredentialsInput()
+#End If
             Catch ex As OperationCanceledException
                 Call AddToLog("Process aborted by user.", Color.DarkMagenta)
+            Catch ex As BskyDirectImageUploader.Bdiu.BskyUploadPayload.BlueskyException
+                Call AddToLog(ex.Message, True)
+                If TypeOf ex Is BskyDirectImageUploader.Bdiu.BskyUploadPayload.BlueskyLoginException Then
+                    Call PromptCredentialsInput()
+                End If
             Catch ex As Exception
                 Call AddToLog(ex.ToString(), True)
             Finally
+                RemoveHandler payload.ProcessDataReceived, AddressOf BskyUpload_ProcessDataReceived
                 Call EnableFormAfterProcessFinish()
             End Try
+
         End Using
     End Sub
 
@@ -302,15 +381,21 @@ Public Class BdiuBskyPostBuilderForm
         Call subForm.Dispose()
     End Sub
     Private Async Function OptimizePngFiles() As Task(Of Boolean)
-        _cts = New CancellationTokenSource()
+        _cts = New System.Threading.CancellationTokenSource()
         Dim returnVal = Await OptimizePngFiles(_cts.Token)
         _cts.Dispose()
         Return returnVal
     End Function
 
-    Private Async Function OptimizePngFiles(ct As CancellationToken) As Task(Of Boolean)
+    Private Async Function OptimizePngFiles(ct As System.Threading.CancellationToken) As Task(Of Boolean)
+        If Me.postData.Images Is Nothing Then
+            Call AddToLog("No Images provided. Skip PNG optimization.", Color.DarkGray)
+            Return True
+        End If
+
         Dim pngFiles As New HashSet(Of String)
         Dim allowedExts As String() = {".png", ".apng"}
+
 
         For Each image In Me.postData.Images
             Dim imagePath = image.FilePath
@@ -319,6 +404,7 @@ Public Class BdiuBskyPostBuilderForm
                 Call pngFiles.Add(imagePath)
             End If
         Next
+
 
         If pngFiles.Count = 0 Then
             Call AddToLog("None of the provided images is a PNG. Skip optimization.", Color.DarkGray)
@@ -364,18 +450,34 @@ Public Class BdiuBskyPostBuilderForm
     End Sub
 
     Private Sub txtAltText_Validated(sender As Object, e As EventArgs) Handles txtAltText.Validated
-        If lstImages.SelectedIndex = -1 Then
+        If lstImages.SelectedIndex = -1 OrElse Me.postData.Images Is Nothing OrElse Me.postData.Images.Count = 0 Then
             Exit Sub
         End If
         Me.postData.Images.Item(lstImages.SelectedIndex).AltText = Me.txtAltText.Text
     End Sub
 
+    Private Sub txtMimeType_Validated(sender As Object, e As EventArgs) Handles txtMimeType.Validated
+        If lstImages.SelectedIndex = -1 OrElse Me.postData.Images Is Nothing OrElse Me.postData.Images.Count = 0 Then
+            Exit Sub
+        End If
+        Me.postData.Images.Item(lstImages.SelectedIndex).MimeType = Me.txtMimeType.Text
+    End Sub
+
+    Private Sub SetMimeTypeTextBoxData()
+        If lstImages.SelectedIndex = -1 OrElse Me.postData.Images Is Nothing OrElse Me.postData.Images.Count = 0 Then
+            Me.txtMimeType.Enabled = False
+        Else
+            Me.txtMimeType.Text = Me.postData.Images.Item(lstImages.SelectedIndex).MimeType
+            Me.txtMimeType.Enabled = True
+        End If
+    End Sub
+
     Private Sub btnSelectImg_Click(sender As Object, e As EventArgs) Handles btnSelectImg.Click
         Dim FileDialog As New OpenFileDialog With {
-            .Filter = "Bluesky Supported Images (*.png;*.jpg;*.jpeg;*.jfif;*.webp;*.avif)|*.png;*.jpg;*.jpeg;*.jfif;*.webp;*.avif|All Files (*.*)|*.*",
+            .Filter = "Bluesky Supported Images (*.png;*.jpg;*.jpeg;*.jfif;*.webp;*.avif;*.svg)|*.png;*.jpg;*.jpeg;*.jfif;*.webp;*.avif,*.svg|All Files (*.*)|*.*",
             .Multiselect = True,
             .RestoreDirectory = True,
-            .Title = "Select 1 to 4 Images (Hold CTRL to select multiple)"
+            .Title = "Select 1 or more Images (Hold CTRL to select multiple)"
         }
 
         Dim DummyForm As New Form() With {.TopMost = True}
@@ -392,9 +494,9 @@ Public Class BdiuBskyPostBuilderForm
 
     Private Sub chkSexual_CheckedChanged(sender As Object, e As EventArgs) Handles chkSexual.CheckedChanged
         If chkSexual.Checked Then
-            Call Me.postData.AddLabel("sexual")
+            postData.AddLabel("sexual")
         Else
-            Call Me.postData.RemoveLabel("sexual")
+            postData.RemoveLabel("sexual")
         End If
         RaiseEvent WarningLabelsUpdated()
     End Sub
@@ -506,66 +608,257 @@ Public Class BdiuBskyPostBuilderForm
     Private Sub SetImageDataOnForm()
         Call Me.SetImageDimensionsData()
         Call Me.SetAltTextBoxData()
+        Call Me.SetMimeTypeTextBoxData()
+    End Sub
+
+    Private Sub ClearImageDimensionsNud()
+        Call ClearImageWidthNud()
+        Call ClearImageHeightNud()
+    End Sub
+    Private Sub ClearImageWidthNud()
+        Me.nudWidth.Value = 0
+        Me.nudWidth.Text = Nothing
+    End Sub
+    Private Sub ClearImageHeightNud()
+        Me.nudHeight.Value = 0
+        Me.nudHeight.Text = Nothing
     End Sub
 
     Private Sub SetImageDimensionsData()
 
         If lstImages.SelectedIndex = -1 OrElse Me.postData.Images Is Nothing OrElse Me.postData.Images.Count = 0 Then
-            Me.nudWidth.Text = Nothing
-            Me.nudHeight.Text = Nothing
             Me.nudWidth.Enabled = False
             Me.nudHeight.Enabled = False
+            Call ClearImageDimensionsNud()
         Else
             Dim imgDim = Me.postData.Images.Item(lstImages.SelectedIndex).Dimensions
-            'Stop
+
             If imgDim IsNot Nothing Then
                 If imgDim.Width.HasValue Then
-                    Me.nudWidth.Value = imgDim.Width.Value
-                    Me.nudWidth.Text = CStr(imgDim.Width.Value)
+                    Dim val = imgDim.Width.Value
+                    Me.nudWidth.Text = CStr(val)
+                    Me.nudWidth.Value = val
                 Else
-                    Me.nudWidth.Text = Nothing
+                    Call ClearImageWidthNud()
                 End If
                 If imgDim.Height.HasValue Then
-                    Me.nudHeight.Value = imgDim.Height.Value
-                    Me.nudHeight.Text = CStr(imgDim.Height.Value)
+                    Dim val = imgDim.Height.Value
+                    Me.nudHeight.Text = CStr(val)
+                    Me.nudHeight.Value = val
                 Else
-                    Me.nudHeight.Text = Nothing
+                    Call ClearImageHeightNud()
                 End If
+            Else
+                Call ClearImageDimensionsNud()
             End If
             Me.nudWidth.Enabled = True
             Me.nudHeight.Enabled = True
         End If
     End Sub
 
-    Private Sub nudWidth_ValueChanged(sender As Object, e As EventArgs) Handles nudWidth.ValueChanged
+    Private Sub nudWidth_Leave(sender As Object, e As EventArgs) Handles nudWidth.Leave
         If lstImages.SelectedIndex = -1 OrElse Me.postData.Images Is Nothing OrElse Me.postData.Images.Count = 0 Then
         Else
             Dim imgDim = Me.postData.Images.Item(lstImages.SelectedIndex).Dimensions
 
             If imgDim IsNot Nothing Then
+                If String.IsNullOrWhiteSpace(Me.nudWidth.Text) Then
+                    imgDim.Width = Nothing
+                    Call SetImageDimensionsData()
+                Else
+                    Select Case Me.nudWidth.Value
+                        Case 0, > UInt32.MaxValue, < UInt32.MinValue
+                            imgDim.Width = Nothing
+                        Case Else
+                            imgDim.Width = CType(Me.nudWidth.Value, System.UInt32)
+                    End Select
+                End If
+            Else
                 Select Case Me.nudWidth.Value
                     Case 0, > UInt32.MaxValue, < UInt32.MinValue
-                        imgDim.Width = Nothing
                     Case Else
-                        imgDim.Width = CType(Me.nudWidth.Value, System.UInt32)
+                        Me.postData.Images.Item(lstImages.SelectedIndex).Dimensions = New Bdiu.BskyUploadPostData.BskyUploadImageData.ImageDimensions(CType(Me.nudWidth.Value, System.UInt32), 0)
                 End Select
             End If
         End If
     End Sub
 
-    Private Sub NumericUpDown1_ValueChanged(sender As Object, e As EventArgs) Handles nudHeight.ValueChanged
+    Private Sub nudHeight_Leave(sender As Object, e As EventArgs) Handles nudHeight.Leave
         If lstImages.SelectedIndex = -1 OrElse Me.postData.Images Is Nothing OrElse Me.postData.Images.Count = 0 Then
         Else
             Dim imgDim = Me.postData.Images.Item(lstImages.SelectedIndex).Dimensions
 
             If imgDim IsNot Nothing Then
+                If String.IsNullOrWhiteSpace(Me.nudHeight.Text) Then
+                    imgDim.Height = Nothing
+                    Call SetImageDimensionsData()
+                Else
+                    Select Case Me.nudHeight.Value
+                        Case 0, > UInt32.MaxValue, < UInt32.MinValue
+                            imgDim.Height = Nothing
+                        Case Else
+                            imgDim.Height = CType(Me.nudHeight.Value, System.UInt32)
+                    End Select
+                End If
+            Else
                 Select Case Me.nudHeight.Value
                     Case 0, > UInt32.MaxValue, < UInt32.MinValue
-                        imgDim.Height = Nothing
                     Case Else
-                        imgDim.Height = CType(Me.nudHeight.Value, System.UInt32)
+                        Me.postData.Images.Item(lstImages.SelectedIndex).Dimensions = New Bdiu.BskyUploadPostData.BskyUploadImageData.ImageDimensions(0, CType(Me.nudHeight.Value, System.UInt32))
                 End Select
             End If
+        End If
+    End Sub
+
+    Private Sub chkQuote_CheckedChanged(sender As Object, e As EventArgs) Handles chkQuote.CheckedChanged
+        Call SetReplyToOrQuoteBox()
+    End Sub
+
+    Private Sub SetReplyToOrQuoteBox()
+        Me.postData.ReplyIsQuote = chkQuote.Checked
+        If Me.postData.ReplyIsQuote Then
+            Me.grpReplyTo.Text = "Quote post"
+            Me.txtReplyUrl.PlaceholderText = "URL of the post you are quoting (optional)"
+        Else
+            Me.grpReplyTo.Text = "Reply to"
+            Me.txtReplyUrl.PlaceholderText = "URL to the post you are replying to (optional)"
+        End If
+    End Sub
+
+    Private Sub cboLanguageAdd_SelectedIndexChanged(sender As Object, e As EventArgs) Handles cboLanguageAdd.SelectedIndexChanged
+        If cboLanguageAdd.SelectedValue IsNot Nothing Then
+            Dim selectedVal = cboLanguageAdd.SelectedValue
+            Dim selectedBcp47 As String
+
+            If TypeOf selectedVal Is Bdiu.LanguageItem Then
+                selectedBcp47 = DirectCast(selectedVal, Bdiu.LanguageItem).Bcp47Tag
+            ElseIf TypeOf selectedVal Is String Then
+                selectedBcp47 = DirectCast(selectedVal, String)
+            Else
+                Return
+            End If
+
+            If Me.postData.AddLanguage(selectedBcp47) Then
+                Call RefreshLanguageTextBox()
+            End If
+        End If
+    End Sub
+
+    Private Sub RefreshLanguageTextBox()
+        If Me.postData.Languages Is Nothing Then
+            Me.txtLanguages.Text = Nothing
+        Else
+            Me.txtLanguages.Text = String.Join(", ", Me.postData.Languages)
+        End If
+    End Sub
+
+    Private Sub txtLanguages_Validated(sender As Object, e As EventArgs) Handles txtLanguages.Validated
+        Me.postData.ClearLanguages()
+        If String.IsNullOrWhiteSpace(txtLanguages.Text) Then
+            Me.postData.Languages = Nothing
+            Call RefreshLanguageTextBox()
+            Return
+        End If
+
+        ' Split by commas
+        Dim rawTokens As String() = txtLanguages.Text.Split(","c)
+
+        For Each token As String In rawTokens
+            ' Clean up spaces
+            Dim cleanTag As String = token.Trim()
+            Me.postData.AddLanguage(cleanTag)
+        Next
+        Call RefreshLanguageTextBox()
+    End Sub
+
+    Private Function CurrentCultureDateTimeFormat() As String
+        ' Get the cultural settings of the current user's system
+        Dim activeCulture As System.Globalization.CultureInfo = System.Globalization.CultureInfo.CurrentCulture
+
+        ' Get all patterns for the general short date/time format ("g") and pick the first one
+        ' The 'g'c defines the character literal for the "g" specifier
+        Dim culturePattern As String = activeCulture.DateTimeFormat.GetAllDateTimePatterns("g"c)(0)
+
+        ' Append seconds right after the minute pattern ("mm")
+        If culturePattern.Contains("mm") Then
+            culturePattern = culturePattern.Replace("mm", "mm:ss")
+        End If
+
+        Return culturePattern
+    End Function
+    Public Sub RefreshCreatedAtBox()
+        If Me.btnSetCreatedAtDuringPosting.Checked Then
+            Me.postData.CreatedAt = Nothing
+            Me.dtpCreatedAt.Enabled = False
+            RemoveHandler dtpCreatedAt.ValueChanged, AddressOf dtpCreatedAt_ValueChanged
+            Me.dtpCreatedAt.Format = DateTimePickerFormat.Custom
+            Me.dtpCreatedAt.CustomFormat = " "
+            Me.txtCreatedAt.Enabled = False
+            RemoveHandler txtCreatedAt.Validated, AddressOf txtCreatedAt_Validated
+            Me.txtCreatedAt.Text = Nothing
+        Else
+            RemoveHandler dtpCreatedAt.ValueChanged, AddressOf dtpCreatedAt_ValueChanged
+            RemoveHandler txtCreatedAt.Validated, AddressOf txtCreatedAt_Validated
+            If Me.btnSetCreatedAtByAttachments.Checked AndAlso Me.postData.Images IsNot Nothing AndAlso Me.postData.Images.Count > 0 Then
+                If Me.cmbSetDateFromAttachType.Text.Equals("Created", StringComparison.OrdinalIgnoreCase) Then
+                    Me.postData.CreatedAt = Me.postData.GetMaxCreatedAttachmentDate
+                Else
+                    Me.postData.CreatedAt = Me.postData.GetMaxModifiedAttachmentDate
+                End If
+            End If
+            If Not Me.postData.CreatedAt.HasValue Then
+                Me.postData.CreatedAt = DateTimeOffset.Now
+            End If
+            Me.dtpCreatedAt.Enabled = True
+            Me.dtpCreatedAt.Value = Me.postData.CreatedAt.Value.LocalDateTime
+            AddHandler dtpCreatedAt.ValueChanged, AddressOf dtpCreatedAt_ValueChanged
+            Me.dtpCreatedAt.Format = DateTimePickerFormat.Custom
+            Me.dtpCreatedAt.CustomFormat = CurrentCultureDateTimeFormat()
+            Me.txtCreatedAt.Enabled = True
+            Me.txtCreatedAt.Text = Me.postData.CreatedAt.Value.LocalDateTime.ToString("o") ' Convert to ISO 8601 String
+            AddHandler txtCreatedAt.Validated, AddressOf txtCreatedAt_Validated
+        End If
+    End Sub
+
+    Private Sub txtCreatedAt_Validated(sender As Object, e As EventArgs) Handles txtCreatedAt.Validated
+
+        ' Parse the ISO 8601 string back into a DateTimeOffset object
+        Dim parsedValue As DateTimeOffset
+        If DateTimeOffset.TryParse(txtCreatedAt.Text, parsedValue) Then
+            ' Set internal value
+            Me.postData.CreatedAt = parsedValue
+        Else
+            ' Conversion failed
+            ' Will be reset back to the previous value
+        End If
+
+        ' Refresh related form data
+        Call RefreshCreatedAtBox()
+    End Sub
+
+    Private Sub dtpCreatedAt_ValueChanged(sender As Object, e As EventArgs) Handles dtpCreatedAt.ValueChanged
+        ' Set internal value
+        Me.postData.CreatedAt = New DateTimeOffset(dtpCreatedAt.Value)
+
+        ' Refresh related form data
+        Call RefreshCreatedAtBox()
+    End Sub
+
+    Private Sub btnSetCreatedAtDuringUpload_CheckedChanged(sender As Object, e As EventArgs) Handles btnSetCreatedAtDuringPosting.CheckedChanged
+        If Me.btnSetCreatedAtDuringPosting.Checked Then
+            Me.btnSetCreatedAtByAttachments.Checked = False
+        End If
+        Call Me.RefreshCreatedAtBox()
+    End Sub
+    Private Sub btnSetCreatedAtByAttachments_CheckedChanged(sender As Object, e As EventArgs) Handles btnSetCreatedAtByAttachments.CheckedChanged
+        If Me.btnSetCreatedAtByAttachments.Checked Then
+            Me.btnSetCreatedAtDuringPosting.Checked = False
+        End If
+        Call Me.RefreshCreatedAtBox()
+    End Sub
+    Private Sub cmbSetDateFromAttachType_SelectedIndexChanged(sender As Object, e As EventArgs) Handles cmbSetDateFromAttachType.SelectedIndexChanged
+        If Me.btnSetCreatedAtByAttachments.Checked Then
+            Call Me.RefreshCreatedAtBox()
         End If
     End Sub
 End Class

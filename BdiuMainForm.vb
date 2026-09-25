@@ -51,5 +51,16 @@ Public Class BdiuMainForm
     Private Sub BdiuMainForm_Load(sender As Object, e As EventArgs) Handles MyBase.Load
         Me.Text = String.Format("{0} - Version {1}", My.Application.Info.Title, My.Application.Info.Version.ToString())
     End Sub
+
+    Private Sub btnShowLibraries_Click(sender As Object, e As EventArgs) Handles btnShowLibraries.Click
+        Dim subForm As New FormLicenses With {
+                .Icon = Me.Icon,
+                .StartPosition = FormStartPosition.CenterParent
+            }
+        Call Me.Hide()
+        Call subForm.ShowDialog(owner:=Me)
+        Call Me.Show()
+        Call subForm.Dispose()
+    End Sub
 End Class
 #Enable Warning IDE1006 ' Naming Styles
