@@ -59,7 +59,7 @@ Namespace Bdiu
         Public Function FindExecutable(ByRef FileSearch As String, ByRef SearchPath As String) As String
             Const MIN_SUCCESS_LNG As Byte = &H20
             Const MAX_PATH As Integer = &H104
-            Dim retPath As String = New String(vbNullChar.Single, MAX_PATH)
+            Dim retPath As New String(vbNullChar.Single, MAX_PATH)
 
             Dim [return] = FindExecutable(
                     lpFile:=FileSearch,
