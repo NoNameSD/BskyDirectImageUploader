@@ -462,52 +462,6 @@ Namespace Bdiu
         End Class
 #End If
 
-        'Public Class LocalHashtagExtractor
-        '    Implements IFacetExtractor
-
-        '    Public Function ExtractFacets(text As String, Optional cancellationToken As CancellationToken = Nothing) As Task(Of IList(Of Facet)) Implements IFacetExtractor.ExtractFacets
-
-        '        Dim facetsList As New List(Of Facet)()
-
-        '        If String.IsNullOrEmpty(text) Then
-        '            Return Task.FromResult(DirectCast(facetsList, IList(Of Facet)))
-        '        End If
-
-        '        ' FIX: Use Regular Expressions to find matches starting with # that are bound by any whitespace or boundaries
-        '        ' This matches hashtags cleanly even if they are right next to a line break (\r or \n)
-        '        Dim hashtagRegex As New Regex("(?<=\s|^)#\w+", RegexOptions.Compiled)
-        '        Dim matches As MatchCollection = hashtagRegex.Matches(text)
-
-        '        For Each match As Match In matches
-        '            Dim fullTagWord As String = match.Value
-
-        '            ' Clean the tag value for metadata indexing
-        '            Dim cleanTagMetadata As String = fullTagWord.TrimStart("#"c)
-
-        '            ' Pinpoint the exact character index found by the Regex engine
-        '            Dim charIndex As Integer = match.Index
-
-        '            ' Calculate accurate UTF-8 byte mapping bounds using AsSpan
-        '            Dim byteStart As Integer = Encoding.UTF8.GetByteCount(text.AsSpan(0, charIndex))
-        '            Dim byteEnd As Integer = byteStart + Encoding.UTF8.GetByteCount(fullTagWord)
-
-        '            ' Construct the ByteSlice
-        '            Dim indexSlice As New ByteSlice(byteStart, byteEnd)
-
-        '            ' Construct the tag feature instance
-        '            Dim tagFeature As New TagFacetFeature(cleanTagMetadata)
-        '            Dim featureList As New List(Of FacetFeature) From {tagFeature}
-
-        '            ' Combine into the 2-parameter Facet constructor
-        '            Dim facetRecord As New Facet(indexSlice, featureList)
-
-        '            facetsList.Add(facetRecord)
-        '        Next
-
-        '        Return Task.FromResult(DirectCast(facetsList, IList(Of Facet)))
-        '    End Function
-        'End Class
-
         Public Shared Async Function GetStrongRefFromUrl(agent As idunno.Bluesky.BlueskyAgent, postUrl As String, ct As System.Threading.CancellationToken) As Task(Of idunno.AtProto.Repo.StrongReference)
             ' 1. Parse the web URL to extract the handle/DID and the record key (rkey)
             ' Format: https://bsky.app/profile/{actor}/post/{rkey}
