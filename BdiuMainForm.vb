@@ -1,11 +1,9 @@
 ﻿#Disable Warning IDE1006 ' Naming Styles
-Imports System.ComponentModel
-Imports BskyDirectImageUploader.Bdiu
 
 Public Class BdiuMainForm
 
-    <DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)>
-    Public Property OxiPngOpt As New OxiPngOptimize
+    <System.ComponentModel.DesignerSerializationVisibility(System.ComponentModel.DesignerSerializationVisibility.Hidden)>
+    Public Property OxiPngOpt As New BskyDirectImageUploader.Bdiu.OxiPngOptimize
 
     Private Sub btnCreatePost_Click(sender As Object, e As EventArgs) Handles btnCreatePost.Click
         Dim subForm As New BdiuBskyPostBuilderForm With {
