@@ -9,7 +9,7 @@
     <NeutralLanguage>en-GB</NeutralLanguage>
     <OptionStrict>On</OptionStrict>
     <SignAssembly>false</SignAssembly>
-    <Version>0.2.2.0</Version>
+    <Version>0.2.2.1</Version>
     <AppDesignerFolder>Bdiu</AppDesignerFolder>
   </PropertyGroup>
 
@@ -20,8 +20,8 @@
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="idunno.Bluesky" Version="6.0.0" />
-    <PackageReference Include="Magick.NET-Q8-AnyCPU" Version="14.17.1" />
+    <PackageReference Include="idunno.Bluesky" Version="7.0.1" />
+    <PackageReference Include="Magick.NET-Q8-AnyCPU" Version="14.17.2" />
     <PackageReference Include="System.IdentityModel.Tokens.Jwt" Version="8.23.0" />
   </ItemGroup>
 

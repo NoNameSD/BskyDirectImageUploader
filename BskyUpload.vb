@@ -67,27 +67,43 @@ Namespace Bdiu
                 Next
             End If
 
-            RaiseEvent ProcessDataReceived(Me, "Embedding images", False)
             ct.ThrowIfCancellationRequested()
 
             ' The library usually validates if the 10 image limit is exceeded and throws an error
             ' Bluesky itself technically allows 20 however
             ' This circumvents the limit validation with an inherited class
-            Dim imageGalleryEmbeds As EmbeddedGalleryEdit = Nothing
+            Dim imageGalleryEmbeds As idunno.Bluesky.Embed.EmbeddedGallery = Nothing
             If uploadedImagesList IsNot Nothing AndAlso uploadedImagesList.Count > 0 Then
+
+                RaiseEvent ProcessDataReceived(Me, "Embedding images", False)
 
                 ' Create the EmbeddedGallery instance and add the first image
                 ' This is the only image that will be validated before sending the data to Bluesky
                 Dim firstGalleryImageLst As New List(Of idunno.Bluesky.Embed.Gallery.GalleryImage)
                 Call firstGalleryImageLst.Add(New idunno.Bluesky.Embed.Gallery.GalleryImage(uploadedImagesList(0)))
-                imageGalleryEmbeds = New EmbeddedGalleryEdit(firstGalleryImageLst)
+                imageGalleryEmbeds = New idunno.Bluesky.Embed.EmbeddedGallery(firstGalleryImageLst)
 
-                ' Add all other images without validation
-                For i As Byte = 1 To CByte(uploadedImagesList.Count - 1)
-                    Dim imageGalleryEmbed As New idunno.Bluesky.Embed.Gallery.GalleryImage(uploadedImagesList(i))
-
-                    Call imageGalleryEmbeds.AddWithoutValidate(imageGalleryEmbed)
+                ' Convert the EmbeddedImage List to a GalleryImage List
+                Dim uploadedGalleryImagesList As New List(Of idunno.Bluesky.Embed.Gallery.GalleryImage)
+                For Each imageEmbed In uploadedImagesList
+                    Dim galleryImageEmbed = New idunno.Bluesky.Embed.Gallery.GalleryImage(imageEmbed)
+                    Call uploadedGalleryImagesList.Add(galleryImageEmbed)
                 Next
+
+                Dim galleryType As Type = GetType(idunno.Bluesky.Embed.EmbeddedGallery)
+
+                ' Get the internal Private GalleryImage List in the EmbeddedGallery
+                Dim itemsField As System.Reflection.FieldInfo = galleryType.GetField("_items", System.Reflection.BindingFlags.NonPublic Or System.Reflection.BindingFlags.Instance)
+
+                ' Set the internal List directly to avoid validation
+                Call itemsField?.SetValue(imageGalleryEmbeds, uploadedGalleryImagesList)
+
+                If imageGalleryEmbeds.Count = uploadedImagesList.Count Then
+                    RaiseEvent ProcessDataReceived(Me, "Images embedded", False)
+                Else
+                    RaiseEvent ProcessDataReceived(Me, "Images embedding failed", True)
+                    Throw New BlueskyException("Failed setting the gallery images in the EmbeddedGallery")
+                End If
             End If
 
             ct.ThrowIfCancellationRequested()
@@ -381,30 +397,6 @@ Namespace Bdiu
             End If
             Return Nothing
         End Function
-
-        Public Class EmbeddedGalleryEdit
-            Inherits idunno.Bluesky.Embed.EmbeddedGallery
-
-            Public Sub New(original As idunno.Bluesky.Embed.EmbeddedGallery)
-                MyBase.New(original)
-            End Sub
-
-            Public Sub New(items As ICollection(Of idunno.Bluesky.Embed.EmbeddedImage))
-                MyBase.New(items)
-            End Sub
-
-            Public Sub New(items As ICollection(Of idunno.Bluesky.Embed.Gallery.GalleryImage))
-                MyBase.New(items)
-            End Sub
-
-            ''' <summary>
-            ''' Allows adding gallery images without validation
-            ''' </summary>
-            ''' <param name="item"></param>
-            Public Sub AddWithoutValidate(item As idunno.Bluesky.Embed.Gallery.GalleryImage)
-                Me.Items.Add(item)
-            End Sub
-        End Class
 
         Public Class BlueskyException
             Inherits Exception
