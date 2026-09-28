@@ -20,7 +20,7 @@ Namespace Logger
         Private ReadOnly _log As Queue(Of LogEntry)
         Private _entryNumber As System.UInt32
         Private _maxEntries As System.UInt32
-        Private ReadOnly _logLock As Object = New Object()
+        Private ReadOnly _logLock As New Object()
         Private ReadOnly _defaultColor As System.Drawing.Color = System.Drawing.Color.Black
 
         Public Property MaxEntries As System.UInt32
@@ -85,7 +85,7 @@ Namespace Logger
                         If includeEntryNumbers Then sb.Append($"{entry.EntryId}. ")
 
                         If includeTimeStamp Then
-                            Call sb.Append($"[{entry.EntryTimeStamp.ToString("yyyy-MM-ddTHH:mm:sszzz")}] ")
+                            Call sb.Append($"[{entry.EntryTimeStamp:yyyy-MM-ddTHH:mm:sszzz}] ")
                         End If
                     End If
 
@@ -109,7 +109,7 @@ Namespace Logger
 
                 For Each entry In _log
                     If includeEntryNumbers Then sb.Append($"{entry.EntryId}. ")
-                    If includeTimeStamp Then sb.Append($"[{entry.EntryTimeStamp.ToString("yyyy-MM-ddTHH:mm:sszzz")}] ")
+                    If includeTimeStamp Then sb.Append($"[{entry.EntryTimeStamp:yyyy-MM-ddTHH:mm:sszzz}] ")
                     sb.Append(entry.EntryText).AppendLine()
                 Next
 
