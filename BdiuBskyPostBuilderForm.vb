@@ -10,6 +10,8 @@ Public Class BdiuBskyPostBuilderForm
 
     Friend Event WarningLabelsUpdated()
 
+    <System.ComponentModel.DesignerSerializationVisibility(System.ComponentModel.DesignerSerializationVisibility.Hidden)>
+    Public Property BskyMgmt As BskyDirectImageUploader.Bdiu.BskySessionManager
     <System.ComponentModel.DesignerSerializationVisibility(System.ComponentModel.DesignerSerializationVisibility.Content)>
     Private WithEvents OxiPngOptInt As Bdiu.OxiPngOptimize
     <System.ComponentModel.DesignerSerializationVisibility(System.ComponentModel.DesignerSerializationVisibility.Hidden)>
@@ -40,9 +42,16 @@ Public Class BdiuBskyPostBuilderForm
         Call Me.RefreshLanguageTextBox()
         AddHandler cboLanguageAdd.SelectedIndexChanged, AddressOf cboLanguageAdd_SelectedIndexChanged
 
-        Me.cmbSetDateFromAttachType.Text = "Created"
+        Me.cmbSetDateFromAttachType.Text = "Modified"
         Me.btnSetCreatedAtByAttachments.Checked = True
         Call RefreshCreatedAtBox()
+
+        If Me.BskyMgmt Is Nothing Then
+            Me.BskyMgmt = New BskyDirectImageUploader.Bdiu.BskySessionManager
+        End If
+        If Not Me.BskyMgmt.BskyAgentIsAuthenticated Then
+            Call Me.BskyMgmt.TryLoadSessionCredentialsLocally()
+        End If
     End Sub
 
     ''' <summary>
@@ -290,30 +299,13 @@ Public Class BdiuBskyPostBuilderForm
                 End If
             End If
 
-            Dim handle As String = Nothing
-            Dim encryptedPassword As Byte() = Nothing
-            Try
-                ' Read credentials that were encrypted using Windows DPAPI (tied to current Windows User Account)
-                handle = System.IO.File.ReadAllText(Bdiu.BdiuHelper.HandleFilePath).Trim()
-                encryptedPassword = System.IO.File.ReadAllBytes(Bdiu.BdiuHelper.PasswordFilePath)
-            Catch ex As Exception
-                Call Bdiu.BDIUExceptionDisplay.DisplayExceptionAsMessageBox(Me, ex)
-            End Try
-
-            If handle Is Nothing OrElse encryptedPassword Is Nothing Then
-                ' Cancel upload and promt User to enter credentials
-                Call PromptCredentialsInput()
-                Call EnableFormAfterProcessFinish()
-                Return
-            End If
-
-            ' Helper class to build the unified payload dictionary for the JSON file
-            Dim payload As New Bdiu.BskyUploadPayload(bskyHandle:=handle, bskyPasswordEncrypted:=encryptedPassword, bskyPost:=postData)
+            ' Initialize Upload Class with the Credentials and Post data
+            Dim upl As New Bdiu.BskyUploadPayload(bskyMgmt:=Me.BskyMgmt, bskyPost:=postData)
 
             ' Post the data to Bluesky
             Try
-                AddHandler payload.ProcessDataReceived, AddressOf BskyUpload_ProcessDataReceived
-                Await payload.PostToBsky(_cts.Token)
+                AddHandler upl.ProcessDataReceived, AddressOf BskyUpload_ProcessDataReceived
+                Await upl.PostToBsky(_cts.Token)
 
                 ' Success if no error is thrown
                 Call MessageBox.Show("Successfully posted to Bluesky!", "Success", MessageBoxButtons.OK, MessageBoxIcon.Information)
@@ -330,7 +322,7 @@ Public Class BdiuBskyPostBuilderForm
             Catch ex As Exception
                 Call AddToLog(ex.ToString(), True)
             Finally
-                RemoveHandler payload.ProcessDataReceived, AddressOf BskyUpload_ProcessDataReceived
+                RemoveHandler upl.ProcessDataReceived, AddressOf BskyUpload_ProcessDataReceived
                 Call EnableFormAfterProcessFinish()
             End Try
 
@@ -343,9 +335,11 @@ Public Class BdiuBskyPostBuilderForm
             .FormBorderStyle = FormBorderStyle.FixedDialog,
             .MaximizeBox = False,
             .MinimizeBox = False,
-            .StartPosition = FormStartPosition.CenterParent
+            .StartPosition = FormStartPosition.CenterParent,
+            .BskyMgmt = Me.BskyMgmt
         }
         Call subForm.ShowDialog(owner:=Me)
+        Me.BskyMgmt = subForm.BskyMgmt
         Call subForm.Dispose()
     End Sub
     Private Async Function OptimizePngFiles() As Task(Of Boolean)
@@ -739,21 +733,6 @@ Public Class BdiuBskyPostBuilderForm
         Call RefreshLanguageTextBox()
     End Sub
 
-    Private Function CurrentCultureDateTimeFormat() As String
-        ' Get the cultural settings of the current user's system
-        Dim activeCulture As System.Globalization.CultureInfo = System.Globalization.CultureInfo.CurrentCulture
-
-        ' Get all patterns for the general short date/time format ("g") and pick the first one
-        ' The 'g'c defines the character literal for the "g" specifier
-        Dim culturePattern As String = activeCulture.DateTimeFormat.GetAllDateTimePatterns("g"c)(0)
-
-        ' Append seconds right after the minute pattern ("mm")
-        If culturePattern.Contains("mm") Then
-            culturePattern = culturePattern.Replace("mm", "mm:ss")
-        End If
-
-        Return culturePattern
-    End Function
     Public Sub RefreshCreatedAtBox()
         If Me.btnSetCreatedAtDuringPosting.Checked Then
             Me.postData.CreatedAt = Nothing
@@ -781,7 +760,7 @@ Public Class BdiuBskyPostBuilderForm
             Me.dtpCreatedAt.Value = Me.postData.CreatedAt.Value.LocalDateTime
             AddHandler dtpCreatedAt.ValueChanged, AddressOf dtpCreatedAt_ValueChanged
             Me.dtpCreatedAt.Format = DateTimePickerFormat.Custom
-            Me.dtpCreatedAt.CustomFormat = CurrentCultureDateTimeFormat()
+            Me.dtpCreatedAt.CustomFormat = Bdiu.BdiuHelper.CurrentCultureDateTimeFormat()
             Me.txtCreatedAt.Enabled = True
             Me.txtCreatedAt.Text = Me.postData.CreatedAt.Value.LocalDateTime.ToString("o") ' Convert to ISO 8601 String
             AddHandler txtCreatedAt.Validated, AddressOf txtCreatedAt_Validated

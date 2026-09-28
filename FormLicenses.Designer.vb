@@ -30,11 +30,12 @@ Partial Class FormLicenses
         ' 
         lstLicenses.Anchor = AnchorStyles.Top Or AnchorStyles.Bottom Or AnchorStyles.Left
         lstLicenses.FormattingEnabled = True
-        lstLicenses.Items.AddRange(New Object() {"idunno.Bluesky", "Magick.NET"})
+        lstLicenses.Items.AddRange(New Object() {"idunno.Bluesky", "Magick.NET", "IdentityModel Extensions for .NET"})
         lstLicenses.Location = New Point(12, 12)
         lstLicenses.Name = "lstLicenses"
         lstLicenses.Size = New Size(136, 124)
         lstLicenses.TabIndex = 0
+        lstLicenses.HorizontalScrollbar = True
         ' 
         ' txtLicense
         ' 

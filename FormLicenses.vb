@@ -14,6 +14,10 @@ Public Class FormLicenses
                 txtLicense.Text =
                     resources.GetString("LICENSE_Magick.NET")
 
+            Case "IdentityModel Extensions for .NET"
+                txtLicense.Text =
+                    resources.GetString("LICENSE_azure-activedirectory-identitymodel-extensions-for-dotnet")
+
             Case Else
                 txtLicense.Text =
                     Nothing

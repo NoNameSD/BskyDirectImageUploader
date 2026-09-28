@@ -4,17 +4,21 @@ Public Class BdiuMainForm
 
     <System.ComponentModel.DesignerSerializationVisibility(System.ComponentModel.DesignerSerializationVisibility.Hidden)>
     Public Property OxiPngOpt As New BskyDirectImageUploader.Bdiu.OxiPngOptimize
+    <System.ComponentModel.DesignerSerializationVisibility(System.ComponentModel.DesignerSerializationVisibility.Hidden)>
+    Public Property BskyMgmt As BskyDirectImageUploader.Bdiu.BskySessionManager
 
     Private Sub btnCreatePost_Click(sender As Object, e As EventArgs) Handles btnCreatePost.Click
         Dim subForm As New BdiuBskyPostBuilderForm With {
                 .Icon = Me.Icon,
                 .StartPosition = FormStartPosition.CenterParent,
-                .OxiPngOpt = OxiPngOpt
+                .OxiPngOpt = OxiPngOpt,
+                .BskyMgmt = Me.BskyMgmt
             }
 
         Call Me.Hide()
         Call subForm.ShowDialog(owner:=Me)
         Call Me.Show()
+        Me.BskyMgmt = subForm.BskyMgmt
         Call subForm.Dispose()
     End Sub
 
@@ -27,12 +31,14 @@ Public Class BdiuMainForm
                 .FormBorderStyle = FormBorderStyle.FixedDialog,
                 .MaximizeBox = False,
                 .MinimizeBox = False,
-                .StartPosition = FormStartPosition.CenterParent
+                .StartPosition = FormStartPosition.CenterParent,
+                .BskyMgmt = Me.BskyMgmt
             }
 
         Call Me.Hide()
         Call subForm.ShowDialog(owner:=Me)
         Call Me.Show()
+        Me.BskyMgmt = subForm.BskyMgmt
         Call subForm.Dispose()
     End Sub
 

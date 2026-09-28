@@ -1,8 +1,6 @@
 ﻿Option Compare Binary
 Option Explicit On
 Option Strict On
-Imports System.IO
-Imports System.Runtime.InteropServices
 
 Namespace Bdiu
     Public Module BdiuHelper
@@ -19,9 +17,75 @@ Namespace Bdiu
         Public Const OneByte As Byte = 1
 
         ' Paths for secure credentials storage
-        Public ReadOnly ConfigFolder As String = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".config", "bsky-ps")
-        Public ReadOnly HandleFilePath As String = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "handle.txt")
-        Public ReadOnly PasswordFilePath As String = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "password.enc")
+        Public ReadOnly HandleFilePath As String = System.IO.Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "handle.txt")
+        Public ReadOnly PasswordFilePath As String = System.IO.Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "password.enc")
+        Public ReadOnly SessionFilePath As String = System.IO.Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "bsky_session.dat")
+        Public ReadOnly EntropyFilePath As String = System.IO.Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "entropy.dat")
+
+        ''' <summary>
+        ''' Generates a dynamic, user-specific entropy byte array for DPAPI encryption.
+        ''' DPAPI itself is already secure, this is just an added layer of security.
+        ''' </summary>
+        Friend Function GetDynamicEntropy() As Byte()
+            ' Hardcoded salt prefix
+            Dim prefixSalt As Byte() = New Byte() {&H7A, &HAE, &H4F, &HC7, &H5B, &HFF, &H84, &HED, &H31, &HA0, &HB9, &H66, &H45, &HA1, &HE0, &H9C, &HE7, &HA1, &H65, &HF8, &HC4, &HB5, &H4F, &H81, &H7B, &HCC, &HB6, &H3F, &HB0, &HD0, &H31, &HA3, &HC4, &H23, &HD3, &H7B, &HBF, &H9C, &HF8, &H5F, &H64, &HA3, &HE7, &H82, &HDA, &H1C}
+
+            ' Hardcoded salt suffix
+            Dim suffixSalt As Byte() = New Byte() {&H80, &HDF, &H3E, &H96, &H4B, &HDA, &H68, &H18, &HD6, &HA9, &H94, &H29, &H3C, &HCD, &HA6, &H52, &H5F, &HD0, &HAD, &HFE, &H29, &HE1, &H74, &H30, &HE4, &HB3, &HD7, &HB0, &H82, &HA5, &HBA, &HA8, &H3E, &HE2, &H4, &H16}
+
+            ' Get the bytes of the current Windows username
+            Dim userName As String = System.Environment.UserName
+            Dim userNameBytes As Byte() = System.Text.Encoding.UTF8.GetBytes(userName)
+
+            ' Also store additional entropy Bytes as a file
+            Dim storedEntropy As Byte()
+            If System.IO.File.Exists(Bdiu.BdiuHelper.EntropyFilePath) Then
+                ' Load entropy from existing file
+                storedEntropy = System.IO.File.ReadAllBytes(Bdiu.BdiuHelper.EntropyFilePath)
+            Else
+                ' Entropy file does not yet exist or has been deleted.
+                ' Creating new one.
+                ' This means however existing encrypted data cannot be decrypted anymore.
+                ReDim storedEntropy(System.Security.Cryptography.RandomNumberGenerator.GetInt32(24, 65))
+                Call System.Security.Cryptography.RandomNumberGenerator.Fill(storedEntropy)
+                Call System.IO.File.WriteAllBytes(Bdiu.BdiuHelper.EntropyFilePath, storedEntropy)
+            End If
+
+            ' Calculate the total length required for the combined array
+            Dim totalLength As Integer = storedEntropy.Length + prefixSalt.Length + userNameBytes.Length + suffixSalt.Length
+            Dim combinedBytes(totalLength - 1) As Byte
+
+            ' Copy the prefix salt into the beginning of the array
+            Call System.Buffer.BlockCopy(prefixSalt, 0, combinedBytes, 0, prefixSalt.Length)
+
+            ' Copy the username bytes right after the prefix salt
+            Call System.Buffer.BlockCopy(userNameBytes, 0, combinedBytes, prefixSalt.Length, userNameBytes.Length)
+
+            ' Copy the suffix salt after the username
+            Dim suffixOffset As Integer = prefixSalt.Length + userNameBytes.Length
+            Call System.Buffer.BlockCopy(suffixSalt, 0, combinedBytes, suffixOffset, suffixSalt.Length)
+
+            ' Copy the locally stored entropy data at the end
+            suffixOffset += suffixSalt.Length
+            Call System.Buffer.BlockCopy(storedEntropy, 0, combinedBytes, suffixOffset, storedEntropy.Length)
+
+            Return combinedBytes
+        End Function
+        Public Function CurrentCultureDateTimeFormat() As String
+            ' Get the cultural settings of the current user's system
+            Dim activeCulture As System.Globalization.CultureInfo = System.Globalization.CultureInfo.CurrentCulture
+
+            ' Get all patterns for the general short date/time format ("g") and pick the first one
+            ' The 'g'c defines the character literal for the "g" specifier
+            Dim culturePattern As String = activeCulture.DateTimeFormat.GetAllDateTimePatterns("g"c)(0)
+
+            ' Append seconds right after the minute pattern ("mm")
+            If culturePattern.Contains("mm") Then
+                culturePattern = culturePattern.Replace("mm", "mm:ss")
+            End If
+
+            Return culturePattern
+        End Function
 
         Public Function GetHashOfSelf() As String
             Dim oHash = System.Security.Cryptography.SHA1.Create
@@ -83,11 +147,11 @@ Namespace Bdiu
     Public Module WinApiFunctions
         ' --- Windows API Setup ---
         ' Import the required functions from user32.dll
-        <DllImport("user32.dll", CharSet:=CharSet.Auto)>
+        <System.Runtime.InteropServices.DllImport("user32.dll", CharSet:=System.Runtime.InteropServices.CharSet.Auto)>
         Private Function GetSystemMenu(hWnd As IntPtr, bRevert As Boolean) As IntPtr
         End Function
 
-        <DllImport("user32.dll", CharSet:=CharSet.Auto)>
+        <System.Runtime.InteropServices.DllImport("user32.dll", CharSet:=System.Runtime.InteropServices.CharSet.Auto)>
         Private Function EnableMenuItem(hMenu As IntPtr, uIDEnableItem As Integer, uEnable As Integer) As Boolean
         End Function
 

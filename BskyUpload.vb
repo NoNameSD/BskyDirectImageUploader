@@ -5,24 +5,15 @@ Option Explicit On
 
 Namespace Bdiu
     Public Class BskyUploadPayload
-        Public Property BskyHandle As String
-        Public Property BskyPasswordEncrypted As Byte()
+        Public Property BskyMgmt As BskySessionManager
         Public Property BskyPost As BskyUploadPostData
 
         Public Event ProcessDataReceived(sender As Object, data As String, isErrorData As Boolean)
 
         Public Async Function PostToBsky(ct As System.Threading.CancellationToken) As Task
 
-            Dim agent As New idunno.Bluesky.BlueskyAgent
-
-            ' Login
-            Dim loginResult = Await agent.Login(
-                        identifier:=Me.BskyHandle,
-                        password:=System.Text.Encoding.UTF8.GetString(System.Security.Cryptography.ProtectedData.Unprotect(Me.BskyPasswordEncrypted, Nothing, System.Security.Cryptography.DataProtectionScope.CurrentUser)),
-                        cancellationToken:=ct)
-            If Not loginResult.Succeeded Then
-                Throw New BlueskyLoginException($"Bluesky login failed. Please check credentials. {loginResult.AtErrorDetail.Error}: {loginResult.AtErrorDetail.Message}", loginResult.StatusCode)
-            End If
+            Call Me.BskyMgmt.ResumeSessionOrLogInIfNotLoggedIn(ct)
+            Dim agent = Me.BskyMgmt.BskyAgent
 
             ct.ThrowIfCancellationRequested()
 
@@ -31,12 +22,14 @@ Namespace Bdiu
             If Not String.IsNullOrWhiteSpace(Me.BskyPost.ReplyUrl) Then
                 RaiseEvent ProcessDataReceived(Me, "Resolving thread metadata for a native reply chain...", False)
 
-                Dim strongRef = Await GetStrongRefFromUrl(agent, Me.BskyPost.ReplyUrl, ct)
+                Dim strongRef = Await GetStrongRefFromUrl(Me.BskyMgmt, Me.BskyPost.ReplyUrl, ct)
 
                 If Me.BskyPost.ReplyIsQuote Then
                     Call buildPost.Quote(strongRef)
                 Else
-                    Await buildPost.ReplyTo(strongRef, agent, ct)
+                    Dim uploadResult = Await Me.BskyMgmt.ExecuteWithAutoSave(
+                        Function() buildPost.ReplyTo(strongRef, agent, ct)
+                        )
                 End If
             End If
 
@@ -52,7 +45,9 @@ Namespace Bdiu
                     RaiseEvent ProcessDataReceived(Me, $"Uploading raw bytes for: {image.FileName}", False)
 
                     ' Upload image as blob
-                    Dim uploadResult = Await agent.UploadBlob(image.FilePath, image.MimeType, cancellationToken:=ct)
+                    Dim uploadResult = Await Me.BskyMgmt.ExecuteWithAutoSave(
+                        Function() agent.UploadBlob(image.FilePath, image.MimeType, cancellationToken:=ct)
+                        )
 
                     If Not uploadResult.Succeeded Then
                         Throw New BlueskyImageUploadException($"Upload of ""{image.FileName}"" failed. {uploadResult.AtErrorDetail.Error}: {uploadResult.AtErrorDetail.Message}", uploadResult.StatusCode)
@@ -110,7 +105,9 @@ Namespace Bdiu
                 ' Pass your agent's handle resolution routine directly into the constructor
                 Dim extractor As idunno.Bluesky.RichText.IFacetExtractor = New idunno.Bluesky.RichText.DefaultFacetExtractor(
                     Async Function(handle, cancellationToken)
-                        Dim resolveResult = Await agent.ResolveHandle(handle, cancellationToken)
+                        Dim resolveResult = Await Me.BskyMgmt.ExecuteWithAutoSave(
+                            Function() agent.ResolveHandle(handle, cancellationToken)
+                            )
                         Return resolveResult.Value
                     End Function
                 )
@@ -198,7 +195,9 @@ Namespace Bdiu
             ct.ThrowIfCancellationRequested()
 
             ' Actually create the Bluesky Post
-            Dim postResult = Await agent.Post(finalPost, cancellationToken:=ct, extractFacets:=False)
+            Dim postResult = Await Me.BskyMgmt.ExecuteWithAutoSave(
+                        Function() agent.Post(finalPost, cancellationToken:=ct, extractFacets:=False)
+                        )
             If Not postResult.Succeeded Then
                 Throw New BlueskyPostCreateException($"Creating Bluesky post failed. {postResult.AtErrorDetail.Error}: {postResult.AtErrorDetail.Message}", postResult.StatusCode)
             End If
@@ -253,26 +252,26 @@ Namespace Bdiu
         End Sub
 #Else
         Public Class LocalFacetExtractor
-            Implements IFacetExtractor
+            Implements idunno.Bluesky.RichText.IFacetExtractor
 
-            Public Property Agent As BlueskyAgent
+            Public Property Agent As idunno.Bluesky.BlueskyAgent
 
-            Sub New(agent As BlueskyAgent)
+            Sub New(agent As idunno.Bluesky.BlueskyAgent)
                 Me.Agent = agent
             End Sub
 
-            Public Function ExtractFacets(text As String, Optional cancellationToken As CancellationToken = Nothing) As Task(Of IList(Of Facet)) Implements IFacetExtractor.ExtractFacets
+            Public Function ExtractFacets(text As String, Optional cancellationToken As System.Threading.CancellationToken = Nothing) As Task(Of IList(Of idunno.Bluesky.RichText.Facet)) Implements idunno.Bluesky.RichText.IFacetExtractor.ExtractFacets
                 ' REGEX PATTERNS FOR ALL RICH TEXT COMPONENTS
-                Dim mentionRegex As New Regex("(?<=\s|^)@([a-zA-Z0-9.-]+)", RegexOptions.Compiled)
-                Dim urlRegex As New Regex("(?<=\s|^)https?://[^\s]+", RegexOptions.Compiled)
-                Dim tagRegex As New Regex("(?<=\s|^)#\w+", RegexOptions.Compiled)
+                Dim mentionRegex As New System.Text.RegularExpressions.Regex("(?<=\s|^)@([a-zA-Z0-9.-]+)", System.Text.RegularExpressions.RegexOptions.Compiled)
+                Dim urlRegex As New System.Text.RegularExpressions.Regex("(?<=\s|^)https?://[^\s]+", System.Text.RegularExpressions.RegexOptions.Compiled)
+                Dim tagRegex As New System.Text.RegularExpressions.Regex("(?<=\s|^)#\w+", System.Text.RegularExpressions.RegexOptions.Compiled)
 
-                Dim facetsList As New List(Of Facet)()
+                Dim facetsList As New List(Of idunno.Bluesky.RichText.Facet)()
 
                 ' --- A. PROCESS MENTIONS (@username) ---
-                For Each match As Match In mentionRegex.Matches(text)
-                    Dim byteStart As Integer = Encoding.UTF8.GetByteCount(text.AsSpan(0, match.Index))
-                    Dim byteEnd As Integer = byteStart + Encoding.UTF8.GetByteCount(match.Value)
+                For Each match As System.Text.RegularExpressions.Match In mentionRegex.Matches(text)
+                    Dim byteStart As Integer = System.Text.Encoding.UTF8.GetByteCount(text.AsSpan(0, match.Index))
+                    Dim byteEnd As Integer = byteStart + System.Text.Encoding.UTF8.GetByteCount(match.Value)
 
                     Dim handleValue As String = match.Groups(1).Value
 
@@ -284,9 +283,9 @@ Namespace Bdiu
                         Call resolveResult.Wait(cancellationToken)
 
                         ' Pass the resolved Did type directly into the feature constructor
-                        Dim mentionFeature As New MentionFacetFeature(resolveResult.Result)
+                        Dim mentionFeature As New idunno.Bluesky.RichText.MentionFacetFeature(resolveResult.Result)
 
-                        Call facetsList.Add(New Facet(New ByteSlice(byteStart, byteEnd), New List(Of FacetFeature) From {mentionFeature}))
+                        Call facetsList.Add(New idunno.Bluesky.RichText.Facet(New idunno.Bluesky.RichText.ByteSlice(byteStart, byteEnd), New List(Of idunno.Bluesky.RichText.FacetFeature) From {mentionFeature}))
 
                     Catch ex As Exception
                         ' Ignore invalid handles
@@ -294,37 +293,37 @@ Namespace Bdiu
                 Next
 
                 ' --- B. PROCESS LINKS (https://...) ---
-                For Each match As Match In urlRegex.Matches(text)
-                    Dim byteStart As Integer = Encoding.UTF8.GetByteCount(text.AsSpan(0, match.Index))
-                    Dim byteEnd As Integer = byteStart + Encoding.UTF8.GetByteCount(match.Value)
+                For Each match As System.Text.RegularExpressions.Match In urlRegex.Matches(text)
+                    Dim byteStart As Integer = System.Text.Encoding.UTF8.GetByteCount(text.AsSpan(0, match.Index))
+                    Dim byteEnd As Integer = byteStart + System.Text.Encoding.UTF8.GetByteCount(match.Value)
 
                     Dim urlValue As String = match.Value
 
                     ' FIX: Convert the string URL into a proper System.Uri object
                     Dim uriObject As New Uri(urlValue)
-                    Dim linkFeature As New LinkFacetFeature(uriObject)
+                    Dim linkFeature As New idunno.Bluesky.RichText.LinkFacetFeature(uriObject)
 
-                    Call facetsList.Add(New Facet(New ByteSlice(byteStart, byteEnd), New List(Of FacetFeature) From {linkFeature}))
+                    Call facetsList.Add(New idunno.Bluesky.RichText.Facet(New idunno.Bluesky.RichText.ByteSlice(byteStart, byteEnd), New List(Of idunno.Bluesky.RichText.FacetFeature) From {linkFeature}))
                 Next
 
                 ' --- C. PROCESS HASHTAGS (#tag) ---
-                For Each match As Match In tagRegex.Matches(text)
-                    Dim byteStart As Integer = Encoding.UTF8.GetByteCount(text.AsSpan(0, match.Index))
-                    Dim byteEnd As Integer = byteStart + Encoding.UTF8.GetByteCount(match.Value)
+                For Each match As System.Text.RegularExpressions.Match In tagRegex.Matches(text)
+                    Dim byteStart As Integer = System.Text.Encoding.UTF8.GetByteCount(text.AsSpan(0, match.Index))
+                    Dim byteEnd As Integer = byteStart + System.Text.Encoding.UTF8.GetByteCount(match.Value)
 
                     ' CRITICAL STEP: Strip the hash prefix so the hidden indexing tag is purely alphanumeric ("dotnet")
                     Dim cleanTagMetadata As String = match.Value.TrimStart("#"c)
-                    Dim tagFeature As New TagFacetFeature(cleanTagMetadata)
+                    Dim tagFeature As New idunno.Bluesky.RichText.TagFacetFeature(cleanTagMetadata)
 
-                    Call facetsList.Add(New Facet(New ByteSlice(byteStart, byteEnd), New List(Of FacetFeature) From {tagFeature}))
+                    Call facetsList.Add(New idunno.Bluesky.RichText.Facet(New idunno.Bluesky.RichText.ByteSlice(byteStart, byteEnd), New List(Of idunno.Bluesky.RichText.FacetFeature) From {tagFeature}))
                 Next
 
-                Return Task.FromResult(DirectCast(facetsList, IList(Of Facet)))
+                Return Task.FromResult(DirectCast(facetsList, IList(Of idunno.Bluesky.RichText.Facet)))
             End Function
         End Class
 #End If
 
-        Public Shared Async Function GetStrongRefFromUrl(agent As idunno.Bluesky.BlueskyAgent, postUrl As String, ct As System.Threading.CancellationToken) As Task(Of idunno.AtProto.Repo.StrongReference)
+        Public Shared Async Function GetStrongRefFromUrl(bskyMgmt As BskySessionManager, postUrl As String, ct As System.Threading.CancellationToken) As Task(Of idunno.AtProto.Repo.StrongReference)
             ' 1. Parse the web URL to extract the handle/DID and the record key (rkey)
             ' Format: https://bsky.app/profile/{actor}/post/{rkey}
             Dim uri As New Uri(postUrl)
@@ -349,8 +348,9 @@ Namespace Bdiu
 
             ' 3. Call the API to get the fully hydrated Post View (which contains the verified CID)
             ' We use GetPostThread with a depth of 0 to fetch only this target post efficiently
-            Dim threadResponse = Await agent.GetPostThread(atUri, depth:=0, cancellationToken:=ct)
-
+            Dim threadResponse = Await bskyMgmt.ExecuteWithAutoSave(
+                        Function() bskyMgmt.BskyAgent.GetPostThread(atUri, depth:=0, cancellationToken:=ct)
+                        )
 
             If threadResponse IsNot Nothing AndAlso threadResponse.Succeeded Then
                 ' Get the base thread object from the response
@@ -476,9 +476,8 @@ Namespace Bdiu
             End Sub
         End Class
 
-        Public Sub New(bskyHandle As String, bskyPasswordEncrypted As Byte(), bskyPost As BskyUploadPostData)
-            Me.BskyHandle = bskyHandle
-            Me.BskyPasswordEncrypted = bskyPasswordEncrypted
+        Public Sub New(bskyMgmt As BskySessionManager, bskyPost As BskyUploadPostData)
+            Me.BskyMgmt = bskyMgmt
             Me.BskyPost = bskyPost
         End Sub
 
@@ -656,6 +655,6 @@ Namespace Bdiu
             ' 2. Sort the languages alphabetically by their friendly display name
             Return languageList.OrderBy(Function(x) x.DisplayName).ToList()
         End Function
-
     End Class
+
 End Namespace

@@ -1,208 +1,176 @@
-﻿Imports System.Runtime.InteropServices
-Imports System.Security.Cryptography
-Imports System.Text
-
 #Disable Warning IDE1006 ' Naming Styles
 Public Class BdiuCredentialForm
 
-    Private Sub btnCallWindowsLogin_Click(sender As Object, e As EventArgs) Handles btnCallWindowsLogin.Click
-        Call EnterCredentials()
+    <System.ComponentModel.DesignerSerializationVisibility(System.ComponentModel.DesignerSerializationVisibility.Hidden)>
+    Public Property BskyMgmt As BskyDirectImageUploader.Bdiu.BskySessionManager
+
+    Private Sub btnEnterCredentials_Click(sender As Object, e As EventArgs) Handles btnEnterCredentials.Click
+        If Me.BskyMgmt Is Nothing Then
+            Me.BskyMgmt = New BskyDirectImageUploader.Bdiu.BskySessionManager
+        End If
+        Call Me.BskyMgmt.EnterCredentials(Me.Handle)
+        Call RefreshForm()
     End Sub
 
-    Public Sub EnterCredentials()
-        Dim userhandle As String = ""
-        Dim password As String = ""
-
-        ' Call modern API wrapper
-        If NativeLogin.ShowLogin(
-            Me.Handle,
-            "Bluesky Authentication",
-            "Please enter your Bluesky Handle and Bluesky App Password.",
-            userhandle,
-            password) Then
-
-            ' Success: Credentials captured successfully in plain text
-            ' Encrypt password natively via Windows Data Protection API (DPAPI)
-            Dim passBytes As Byte() = Encoding.UTF8.GetBytes(password)
-            Dim encryptedBytes As Byte() = ProtectedData.Protect(passBytes, Nothing, DataProtectionScope.CurrentUser)
-
-            System.IO.File.WriteAllText(Bdiu.BdiuHelper.HandleFilePath, userhandle, Encoding.UTF8)
-            System.IO.File.WriteAllBytes(Bdiu.BdiuHelper.PasswordFilePath, encryptedBytes)
-        Else
-            ' Cancelled or closed by the user
+    Public Sub RefreshForm()
+        If Me.BskyMgmt Is Nothing Then
+            Me.BskyMgmt = New BskyDirectImageUploader.Bdiu.BskySessionManager
         End If
-        Call RefreshCredentials()
-    End Sub
+        Dim credentialLoadSuccess As Boolean
+        Try
+            If Me.BskyMgmt.Credentials Is Nothing Then
+                Me.BskyMgmt.Credentials = BskyDirectImageUploader.Bdiu.BskySessionManager.BskyCredentials.LoadNewFromFile
 
-    Public Sub RefreshCredentials()
-
-        ' Decrypt credentials securely using Windows DPAPI (tied to current Windows User Account)
-        If System.IO.File.Exists(Bdiu.BdiuHelper.HandleFilePath) Then
-            Dim handle As String = System.IO.File.ReadAllText(Bdiu.BdiuHelper.HandleFilePath).Trim()
-
-            Me.txtBskyHandle.Text = handle
-        Else
-            Me.txtBskyHandle.Text = Nothing
-        End If
-
-        If System.IO.File.Exists(Bdiu.BdiuHelper.PasswordFilePath) Then
-            Dim encryptedBytes As Byte() = System.IO.File.ReadAllBytes(Bdiu.BdiuHelper.PasswordFilePath)
-
-            Try
-                Call ProtectedData.Unprotect(encryptedBytes, Nothing, DataProtectionScope.CurrentUser)
-                Me.rbtSetBskyPwd.Checked = True
-            Catch ex As Exception
-                Me.rbtSetBskyPwd.Checked = False
-            End Try
-        Else
-            Me.rbtSetBskyPwd.Checked = False
-        End If
-    End Sub
-
-    Public Class NativeLogin
-
-        ' Structure defining the dialog appearance (64-bit compatible)
-        <StructLayout(LayoutKind.Sequential, CharSet:=CharSet.Auto)>
-        Public Structure CREDUI_INFO
-            Public cbSize As Integer
-            Public hwndParent As IntPtr
-            Public pszMessageText As String
-            Public pszCaptionText As String
-            Public hbmBanner As IntPtr
-        End Structure
-
-        ' Modern Windows 10 / 11 API for credential prompt
-        <DllImport("credui.dll", CharSet:=CharSet.Auto)>
-        Private Shared Function CredUIPromptForWindowsCredentials(
-        ByRef pUiInfo As CREDUI_INFO,
-        ByVal dwAuthError As Integer,
-        ByRef pulAuthPackage As UInteger,
-        ByVal pvInAuthBuffer As IntPtr,
-        ByVal ulInAuthBufferSize As UInteger,
-        ByRef ppvOutAuthBuffer As IntPtr,
-        ByRef pulOutAuthBufferSize As UInteger,
-        ByRef pfSave As Boolean,
-        ByVal dwFlags As UInteger) As Integer
-        End Function
-
-        ' Function to unpack the secure Windows authentication buffer into cleartext strings
-        <DllImport("credui.dll", CharSet:=CharSet.Auto)>
-        Private Shared Function CredUnPackAuthenticationBuffer(
-        ByVal dwFlags As Integer,
-        ByVal pvAuthBuffer As IntPtr,
-        ByVal cbAuthBuffer As UInteger,
-        ByVal pszUserName As StringBuilder,
-        ByRef pcchUserName As Integer,
-        ByVal pszDomainName As StringBuilder,
-        ByRef pcchDomainName As Integer,
-        ByVal pszPassword As StringBuilder,
-        ByRef pcchPassword As Integer) As Boolean
-        End Function
-
-        ' Function to release memory allocated by the Windows API
-        <DllImport("ole32.dll", SetLastError:=True)>
-        Private Shared Sub CoTaskMemFree(ByVal pv As IntPtr)
-        End Sub
-
-        ' Dialog control flags
-        Private Const CREDUIWIN_GENERIC As UInteger = &H1
-
-        ''' <summary>
-        ''' Invokes the native Windows login dialog and returns username & password as plain text.
-        ''' </summary>
-        Public Shared Function ShowLogin(
-            ByVal parentHandle As IntPtr,
-            ByRef outUsername As String,
-            ByRef outPassword As String) As Boolean
-
-            Return NativeLogin.ShowLogin(
-                parentHandle,
-                "Authentication Required",
-                "Please enter your credentials.",
-                outUsername,
-                outPassword)
-        End Function
-
-        ''' <summary>
-        ''' Invokes the native Windows login dialog and returns username & password as plain text.
-        ''' </summary>
-        Public Shared Function ShowLogin(
-            ByVal parentHandle As IntPtr,
-            ByVal captionText As String,
-            ByVal messageText As String,
-            ByRef outUsername As String,
-            ByRef outPassword As String) As Boolean
-            ' 1. Configure dialog properties
-            Dim uiInfo As New CREDUI_INFO()
-            uiInfo.cbSize = Marshal.SizeOf(uiInfo)
-            uiInfo.hwndParent = parentHandle
-            uiInfo.pszCaptionText = captionText
-            uiInfo.pszMessageText = messageText
-
-            ' Prepare buffers for the native memory pointer
-            Dim authPackage As UInteger = 0
-            Dim outAuthBuffer As IntPtr = IntPtr.Zero
-            Dim outAuthBufferSize As UInteger = 0
-            Dim saveChecked As Boolean = False ' Left false; since checkbox flag is omitted, it won't show up
-
-            ' 2. Invoke the dialog (CREDUIWIN_GENERIC enforces standard input fields without AD validation)
-            Dim result As Integer = CredUIPromptForWindowsCredentials(
-            uiInfo, 0, authPackage, IntPtr.Zero, 0, outAuthBuffer, outAuthBufferSize, saveChecked, CREDUIWIN_GENERIC
-        )
-
-            ' If result = 0 (ERROR_SUCCESS), the user entered data and clicked OK
-            If result = 0 AndAlso outAuthBuffer <> IntPtr.Zero Then
-                Dim maxLen As Integer = 256
-                Dim usernameBuf As New StringBuilder(maxLen)
-                Dim domainBuf As New StringBuilder(maxLen)
-                Dim passwordBuf As New StringBuilder(maxLen)
-
-                ' 3. Unpack the encrypted Windows buffer directly into cleartext strings
-                Dim unpackResult As Boolean = CredUnPackAuthenticationBuffer(
-                0, outAuthBuffer, outAuthBufferSize,
-                usernameBuf, maxLen, domainBuf, maxLen, passwordBuf, maxLen
-            )
-
-                ' Immediately release the allocated system memory
-                Call CoTaskMemFree(outAuthBuffer)
-
-                If unpackResult Then
-                    outUsername = usernameBuf.ToString()
-                    outPassword = passwordBuf.ToString()
-                    Return True
+                credentialLoadSuccess = Me.BskyMgmt.Credentials IsNot Nothing
+            Else
+                If String.IsNullOrWhiteSpace(Me.BskyMgmt.Credentials.BskyHandle) Then
+                    credentialLoadSuccess = Me.BskyMgmt.Credentials.LoadFromFile()
+                Else
+                    credentialLoadSuccess = True
                 End If
             End If
 
-            Return False
-        End Function
-    End Class
+            If credentialLoadSuccess Then
+                Me.txtBskyHandle.Text = Me.BskyMgmt.Credentials.BskyHandle
+                Me.rbtSetBskyPwd.Checked = True
+            Else
+                Me.txtBskyHandle.Text = Nothing
+                Me.rbtSetBskyPwd.Checked = False
+            End If
+
+            If Not Me.BskyMgmt.BskyAgentIsAuthenticated Then
+                Call Me.BskyMgmt.TryLoadSessionCredentialsLocally()
+            End If
+
+            Me.rbtActiveSession.Checked = Me.BskyMgmt.BskyAgentIsAuthenticated
+
+            If Me.BskyMgmt.BskyAgent Is Nothing Then
+                Me.txtBskyDid.Text = Nothing
+                Call DisableSessionValidDatePicker()
+                Me.btnLogin.Enabled = True
+                Me.btnLogout.Enabled = False
+            Else
+                Me.txtBskyDid.Text = Me.BskyMgmt.BskyAgent.Did
+                If Me.BskyMgmt.BskyAgent.Credentials IsNot Nothing Then
+                    Call EnableSessionValidDatePicker()
+                    Me.dtpSessionValid.Value = Me.BskyMgmt.BskyAgent.Credentials.ExpiresOn.LocalDateTime
+                    Me.dtpRefreshValid.Value = Bdiu.BskySessionManager.GetTokenExpiry(Me.BskyMgmt.BskyAgent.Credentials.RefreshToken).LocalDateTime
+                    Me.btnLogin.Enabled = False
+                    Me.btnLogout.Enabled = True
+                Else
+                    Call DisableSessionValidDatePicker()
+                    Me.btnLogin.Enabled = True
+                    Me.btnLogout.Enabled = False
+                End If
+            End If
+
+        Catch ex As Exception
+            Call Bdiu.BDIUExceptionDisplay.DisplayExceptionAsMessageBox(Me, ex)
+        End Try
+    End Sub
+    Private Sub DisableSessionValidDatePicker()
+        Me.dtpSessionValid.Enabled = False
+        Me.dtpSessionValid.Format = DateTimePickerFormat.Custom
+        Me.dtpSessionValid.CustomFormat = " "
+        Me.dtpRefreshValid.Enabled = Me.dtpSessionValid.Enabled
+        Me.dtpRefreshValid.Format = Me.dtpSessionValid.Format
+        Me.dtpRefreshValid.CustomFormat = Me.dtpSessionValid.CustomFormat
+    End Sub
+    Private Sub EnableSessionValidDatePicker()
+        Me.dtpSessionValid.Enabled = True
+        Me.dtpSessionValid.Format = DateTimePickerFormat.Custom
+        Me.dtpSessionValid.CustomFormat = Bdiu.BdiuHelper.CurrentCultureDateTimeFormat()
+        Me.dtpRefreshValid.Enabled = Me.dtpSessionValid.Enabled
+        Me.dtpRefreshValid.Format = Me.dtpSessionValid.Format
+        Me.dtpRefreshValid.CustomFormat = Me.dtpSessionValid.CustomFormat
+    End Sub
 
     Private Sub btnClearCredentials_Click(sender As Object, e As EventArgs) Handles btnClearCredentials.Click
         Call ClearCredentials()
     End Sub
 
     Public Sub ClearCredentials()
-        ' Delete stored credential files
-        If System.IO.File.Exists(Bdiu.BdiuHelper.HandleFilePath) Then
-            Try
-                System.IO.File.Delete(Bdiu.BdiuHelper.HandleFilePath)
-            Catch ex As Exception
-
-            End Try
+        If Me.BskyMgmt IsNot Nothing AndAlso Me.BskyMgmt.Credentials IsNot Nothing Then
+            Call Me.BskyMgmt.Credentials.ClearCredentials()
         End If
-
-        If System.IO.File.Exists(Bdiu.BdiuHelper.PasswordFilePath) Then
-            Try
-                System.IO.File.Delete(Bdiu.BdiuHelper.PasswordFilePath)
-            Catch ex As Exception
-
-            End Try
-        End If
-        Call RefreshCredentials()
+        Call RefreshForm()
     End Sub
 
     Private Sub BdiuCredentialForm_Load(sender As Object, e As EventArgs) Handles MyBase.Load
-        Call RefreshCredentials()
+        Call RefreshForm()
+    End Sub
+
+    ''' <summary>
+    ''' Logout of the current session and remove locally stored session file
+    ''' </summary>
+    Private Sub btnLogout_Click(sender As Object, e As EventArgs) Handles btnLogout.Click
+        If Me.BskyMgmt IsNot Nothing Then
+            Try
+                Call Me.BskyMgmt.Logout(Nothing)
+            Catch ex As Exception
+                Call Bdiu.BDIUExceptionDisplay.DisplayExceptionAsMessageBox(Me, ex)
+            End Try
+            Call RefreshForm()
+        End If
+    End Sub
+
+    Private Sub btnLogin_Click(sender As Object, e As EventArgs) Handles btnLogin.Click
+        Try
+            Call Me.BskyMgmt.ResumeSessionOrLogInIfNotLoggedIn(Nothing)
+        Catch ex As System.Security.Cryptography.CryptographicException
+            Call MessageBox.Show(Me, $"Decrypting the stored credentials failed.{Environment.NewLine}Please re-enter your credentials.", "Login failed", MessageBoxButtons.OK, MessageBoxIcon.Error)
+        Catch ex As BskyDirectImageUploader.Bdiu.BskyUploadPayload.BlueskyLoginException
+            Call MessageBox.Show(Me, $"Login to Bluesky failed.{Environment.NewLine}Please check your credentials", "Login failed", MessageBoxButtons.OK, MessageBoxIcon.Error)
+        Catch ex As Exception
+            Call MessageBox.Show(Me, $"Error when trying to log into Bluesky: {ex.Message}", "Login failed", MessageBoxButtons.OK, MessageBoxIcon.Error)
+        End Try
+        Call RefreshForm()
+    End Sub
+
+    Private Sub btnTestSession_Click(sender As Object, e As EventArgs) Handles btnTestSession.Click
+        If Me.BskyMgmt IsNot Nothing Then
+            Dim ex As System.Exception = Nothing
+            If Me.BskyMgmt.TestSession(ex) Then
+                Call MessageBox.Show(Me, $"The session is valid or was extended with the refresh token.", "Session valid", MessageBoxButtons.OK, MessageBoxIcon.Information)
+            Else
+                Dim message = $"The session is expired and could not be extended with the refresh token."
+                If ex IsNot Nothing Then
+                    message += $"{Environment.NewLine}{Environment.NewLine}{ex.Message}"
+                End If
+                Call MessageBox.Show(Me, message, "Session invalid/expired", MessageBoxButtons.OK, MessageBoxIcon.Error)
+            End If
+        End If
+    End Sub
+
+    Private Sub btnSaveSession_Click(sender As Object, e As EventArgs) Handles btnSaveSession.Click
+        If Me.BskyMgmt IsNot Nothing Then
+            Call Me.BskyMgmt.SaveSession()
+        End If
+    End Sub
+
+    Private Sub btnRefreshSession_Click(sender As Object, e As EventArgs) Handles btnRefreshSession.Click
+        If Me.BskyMgmt IsNot Nothing AndAlso Me.BskyMgmt.BskyAgent IsNot Nothing Then
+            Dim success As Boolean
+            Dim exc As Exception = Nothing
+            Try
+                Dim tsk = Me.BskyMgmt.BskyAgent.RefreshCredentials()
+                Call tsk.Wait()
+                success = tsk.Result
+            Catch ex As Exception
+                exc = ex
+            End Try
+            If success Then
+                Call MessageBox.Show(Me, "Session successfully extended with the refresh token", "Session extended", MessageBoxButtons.OK, MessageBoxIcon.Information)
+                Call Me.BskyMgmt.SaveSession()
+            Else
+                Dim message = $"The session could not be extended with the refresh token."
+                If exc IsNot Nothing Then
+                    message += $"{Environment.NewLine}{Environment.NewLine}{exc.Message}"
+                End If
+                Call MessageBox.Show(Me, message, "Session invalid/expired", MessageBoxButtons.OK, MessageBoxIcon.Error)
+            End If
+        End If
+        Call RefreshForm()
     End Sub
 End Class
 #Enable Warning IDE1006 ' Naming Styles

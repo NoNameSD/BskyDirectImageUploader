@@ -9,7 +9,8 @@
     <NeutralLanguage>en-GB</NeutralLanguage>
     <OptionStrict>On</OptionStrict>
     <SignAssembly>false</SignAssembly>
-    <Version>0.2.0.1</Version>
+    <Version>0.2.2.0</Version>
+    <AppDesignerFolder>Bdiu</AppDesignerFolder>
   </PropertyGroup>
 
   <ItemGroup>
@@ -21,20 +22,21 @@
   <ItemGroup>
     <PackageReference Include="idunno.Bluesky" Version="6.0.0" />
     <PackageReference Include="Magick.NET-Q8-AnyCPU" Version="14.17.1" />
+    <PackageReference Include="System.IdentityModel.Tokens.Jwt" Version="8.23.0" />
   </ItemGroup>
 
   <ItemGroup>
-    <Compile Update="My Project\Application.Designer.vb">
+    <Compile Update="Bdiu\Application.Designer.vb">
       <DesignTime>True</DesignTime>
       <AutoGen>True</AutoGen>
       <DependentUpon>Application.myapp</DependentUpon>
     </Compile>
-    <Compile Update="My Project\Resources.Designer.vb">
+    <Compile Update="Bdiu\Resources.Designer.vb">
       <DesignTime>True</DesignTime>
       <AutoGen>True</AutoGen>
       <DependentUpon>Resources.resx</DependentUpon>
     </Compile>
-    <Compile Update="My Project\Settings.Designer.vb">
+    <Compile Update="Bdiu\Settings.Designer.vb">
       <DesignTimeSharedInput>True</DesignTimeSharedInput>
       <AutoGen>True</AutoGen>
       <DependentUpon>Settings.settings</DependentUpon>
@@ -42,7 +44,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <EmbeddedResource Update="My Project\Resources.resx">
+    <EmbeddedResource Update="Bdiu\Resources.resx">
       <CustomToolNamespace>My.Resources</CustomToolNamespace>
       <Generator>VbMyResourcesResXFileCodeGenerator</Generator>
       <LastGenOutput>Resources.Designer.vb</LastGenOutput>
@@ -50,11 +52,11 @@
   </ItemGroup>
 
   <ItemGroup>
-    <None Update="My Project\Application.myapp">
+    <None Update="Bdiu\Application.myapp">
       <Generator>MyApplicationCodeGenerator</Generator>
       <LastGenOutput>Application.Designer.vb</LastGenOutput>
     </None>
-    <None Update="My Project\Settings.settings">
+    <None Update="Bdiu\Settings.settings">
       <CustomToolNamespace>My</CustomToolNamespace>
       <Generator>SettingsSingleFileGenerator</Generator>
       <LastGenOutput>Settings.Designer.vb</LastGenOutput>
