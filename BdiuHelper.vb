@@ -20,12 +20,12 @@ Namespace Bdiu
         Public ReadOnly HandleFilePath As String = System.IO.Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "handle.txt")
         Public ReadOnly PasswordFilePath As String = System.IO.Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "password.enc")
         Public ReadOnly SessionFilePath As String = System.IO.Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "bsky_session.dat")
-        Public ReadOnly EntropyFilePath As String = System.IO.Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "entropy.dat")
 
         ''' <summary>
         ''' Generates a dynamic, user-specific entropy byte array for DPAPI encryption.
         ''' DPAPI itself is already secure, this is just an added layer of security.
         ''' </summary>
+        ''' <returns>Entropy Byte Array for DPAPI Encryption</returns>
         Friend Function GetDynamicEntropy() As Byte()
             ' Hardcoded salt prefix
             Dim prefixSalt As Byte() = New Byte() {&H7A, &HAE, &H4F, &HC7, &H5B, &HFF, &H84, &HED, &H31, &HA0, &HB9, &H66, &H45, &HA1, &HE0, &H9C, &HE7, &HA1, &H65, &HF8, &HC4, &HB5, &H4F, &H81, &H7B, &HCC, &HB6, &H3F, &HB0, &HD0, &H31, &HA3, &HC4, &H23, &HD3, &H7B, &HBF, &H9C, &HF8, &H5F, &H64, &HA3, &HE7, &H82, &HDA, &H1C}
@@ -37,39 +37,71 @@ Namespace Bdiu
             Dim userName As String = System.Environment.UserName
             Dim userNameBytes As Byte() = System.Text.Encoding.UTF8.GetBytes(userName)
 
+            ' Merge the varios Byte Arrays with XOR
+            Return MergeBytesXOR(MergeBytesXOR(prefixSalt, userNameBytes), suffixSalt)
+        End Function
+
+        ''' <param name="filePath">Filepath of the encrypted file</param>
+        ''' <returns>Filepath of the entropy file relative to </returns>
+        Friend Function EntropyPathForFilePath(filePath As String) As String
+            Return String.Concat(System.IO.Path.Join(System.IO.Path.GetDirectoryName(filePath), System.IO.Path.GetFileNameWithoutExtension(filePath)), ".entropy")
+        End Function
+
+        ''' <summary>
+        ''' Generates a dynamic, user-specific entropy byte array for DPAPI encryption.
+        ''' DPAPI itself is already secure, this is just an added layer of security.
+        ''' Also stores additional random entropy bytes specific for the encrypded file.
+        ''' </summary>
+        ''' <param name="encryptionFilePath">Path of the encrypted file</param>
+        ''' <param name="newEntropy">Create new local entropy file relative to <paramref name="encryptionFilePath"/></param>
+        ''' <returns>Entropy Byte Array for DPAPI Encryption</returns>
+        Friend Function GetDynamicEntropy(encryptionFilePath As String, newEntropy As Boolean) As Byte()
+
+            ' Entropy file is the Path of the encrypted file minus extension + .entropy
+            Dim entropyFilePath = EntropyPathForFilePath(encryptionFilePath)
+
             ' Also store additional entropy Bytes as a file
             Dim storedEntropy As Byte()
-            If System.IO.File.Exists(Bdiu.BdiuHelper.EntropyFilePath) Then
-                ' Load entropy from existing file
-                storedEntropy = System.IO.File.ReadAllBytes(Bdiu.BdiuHelper.EntropyFilePath)
-            Else
-                ' Entropy file does not yet exist or has been deleted.
-                ' Creating new one.
-                ' This means however existing encrypted data cannot be decrypted anymore.
+            If newEntropy Then
+                If System.IO.File.Exists(entropyFilePath) Then
+                    ' Delete existing entropy file
+                    Call System.IO.File.Delete(entropyFilePath)
+                End If
+
+                ' Create new entropy file
                 ReDim storedEntropy(System.Security.Cryptography.RandomNumberGenerator.GetInt32(24, 65))
                 Call System.Security.Cryptography.RandomNumberGenerator.Fill(storedEntropy)
-                Call System.IO.File.WriteAllBytes(Bdiu.BdiuHelper.EntropyFilePath, storedEntropy)
+                Call System.IO.File.WriteAllBytes(entropyFilePath, storedEntropy)
+            Else
+                ' Load entropy from file
+                storedEntropy = System.IO.File.ReadAllBytes(entropyFilePath)
             End If
 
-            ' Calculate the total length required for the combined array
-            Dim totalLength As Integer = storedEntropy.Length + prefixSalt.Length + userNameBytes.Length + suffixSalt.Length
-            Dim combinedBytes(totalLength - 1) As Byte
+            Return MergeBytesXOR(storedEntropy, GetDynamicEntropy())
+        End Function
 
-            ' Copy the prefix salt into the beginning of the array
-            Call System.Buffer.BlockCopy(prefixSalt, 0, combinedBytes, 0, prefixSalt.Length)
+        ''' <summary>
+        ''' Merges two Byte Arrays with XOR
+        ''' The output Byte Array has the length of the longer array
+        ''' If the input Arrays have varying lengths the smaller array will loop back to the first index, if the end was reached.
+        ''' </summary>
+        ''' <returns>XOR Merged Byte Array</returns>
+        Private Function MergeBytesXOR(array1 As Byte(), array2() As Byte) As Byte()
+            Dim outArray() As Byte
 
-            ' Copy the username bytes right after the prefix salt
-            Call System.Buffer.BlockCopy(userNameBytes, 0, combinedBytes, prefixSalt.Length, userNameBytes.Length)
+            ' The length of the output array corresponds to that of the longest input array.
+            If array1.Length > array2.Length Then
+                ReDim outArray(array1.GetUpperBound(0))
+            Else
+                ReDim outArray(array2.GetUpperBound(0))
+            End If
 
-            ' Copy the suffix salt after the username
-            Dim suffixOffset As Integer = prefixSalt.Length + userNameBytes.Length
-            Call System.Buffer.BlockCopy(suffixSalt, 0, combinedBytes, suffixOffset, suffixSalt.Length)
+            ' Calculate merge of both arrays with XOR on every Byte
+            For i = 0 To outArray.GetUpperBound(0)
+                outArray(i) = array1(i Mod array1.Length) Xor array2(i Mod array2.Length)
+            Next
 
-            ' Copy the locally stored entropy data at the end
-            suffixOffset += suffixSalt.Length
-            Call System.Buffer.BlockCopy(storedEntropy, 0, combinedBytes, suffixOffset, storedEntropy.Length)
-
-            Return combinedBytes
+            Return outArray
         End Function
         Public Function CurrentCultureDateTimeFormat() As String
             ' Get the cultural settings of the current user's system

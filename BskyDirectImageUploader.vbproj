@@ -9,7 +9,7 @@
     <NeutralLanguage>en-GB</NeutralLanguage>
     <OptionStrict>On</OptionStrict>
     <SignAssembly>false</SignAssembly>
-    <Version>0.2.2.1</Version>
+    <Version>0.2.2.2</Version>
     <AppDesignerFolder>My Project</AppDesignerFolder>
   </PropertyGroup>
 

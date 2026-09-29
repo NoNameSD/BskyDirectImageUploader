@@ -152,7 +152,7 @@
 
 #If EncryptSavedSession Then
             ' Encrypt via DPAPI (CurrentUser scope ensures only this Windows user on this machine can decrypt it)
-            Dim encryptedBytes As Byte() = System.Security.Cryptography.ProtectedData.Protect(plainBytes, GetDynamicEntropy, System.Security.Cryptography.DataProtectionScope.CurrentUser)
+            Dim encryptedBytes As Byte() = System.Security.Cryptography.ProtectedData.Protect(plainBytes, GetDynamicEntropy(Bdiu.BdiuHelper.SessionFilePath, True), System.Security.Cryptography.DataProtectionScope.CurrentUser)
 
             ' Save encrypted session data to a file
             Call System.IO.File.WriteAllBytes(Bdiu.BdiuHelper.SessionFilePath, encryptedBytes)
@@ -174,10 +174,10 @@
 
                 Dim plainBytes As Byte()
                 If DpapiValidator.IsValidDpapiBlob(encryptedBytes) Then
-                    Dim entropy As Byte() = GetDynamicEntropy()
+                Dim entropy As Byte() = Bdiu.GetDynamicEntropy(Bdiu.BdiuHelper.SessionFilePath, False)
 
-                    ' Decrypt via DPAPI
-                    plainBytes = System.Security.Cryptography.ProtectedData.Unprotect(
+                ' Decrypt via DPAPI
+                plainBytes = System.Security.Cryptography.ProtectedData.Unprotect(
                          encryptedBytes,
                          entropy,
                          System.Security.Cryptography.DataProtectionScope.CurrentUser
@@ -224,10 +224,20 @@
                 Catch ex As System.Exception
                     ' Session already invalid
                 End Try
-
-                ' Clear the in-memory session credentials immediately
-                Me.BskyAgent.Credentials = Nothing
             End If
+
+            ' Clear the in-memory session credentials immediately
+            Me.BskyAgent.Credentials = Nothing
+
+            ' Remove local entropy file for the local encrypted credential file from the disk
+            Try
+                Dim sessEntrPth = EntropyPathForFilePath(Bdiu.BdiuHelper.SessionFilePath)
+                If System.IO.File.Exists(sessEntrPth) Then
+                    System.IO.File.Delete(sessEntrPth)
+                End If
+            Catch ex As System.Exception
+                ' File could not be deleted (Probably locked by another process)
+            End Try
 
             ' Remove the local encrypted credential file from the disk
             Try
@@ -309,7 +319,8 @@
         ''' <summary>
         ''' Checks if there is a current active valid BlueSky session.
         ''' If not it first tries to load the locally stored session data.
-        ''' If that fails it tries to log in with the cached or locally stored credentials to create a new session.
+        ''' If the session token is expired, try to extend the session with the refresh token.
+        ''' If that fails, try to log in with the cached or locally stored credentials to create a new session.
         ''' </summary>
         ''' <param name="ct">Optional CancellationToken</param>
         Public Sub ResumeSessionOrLogInIfNotLoggedIn(ct As System.Threading.CancellationToken)
@@ -320,12 +331,25 @@
                     If Me.BskyAgentIsAuthenticated Then
                         ' Successfully resumed the session and verified its validity
                     Else
-                        ' Resumed session is expired
-                        ' New login with credentials required
-                        Call LoginWithCredentialsToBsky(ct)
+                        ' Session expired, but the refresh token may still be valid
+                        ' Try extending the session
+                        Try
+                            Dim tsk = Me.BskyAgent.RefreshCredentials(ct)
+                            Call tsk.Wait(ct)
+                            Call Me.SaveSession()
+                        Catch ex As Exception
+                            ' Ignore Exceptions
+                        End Try
+                        If Me.BskyAgentIsAuthenticated Then
+                            ' Successfully extended the session with the refresh token
+                        Else
+                            ' Refresh token is also expired
+                            ' New login with credentials required
+                            Call LoginWithCredentialsToBsky(ct)
+                        End If
                     End If
                 Else
-                    ' No session data stored or resuming failed
+                    ' No session data stored or data invalid
                     ' New login with credentials required
                     Call LoginWithCredentialsToBsky(ct)
                 End If
@@ -390,7 +414,7 @@
                     If Me.BskyPasswordEncrypted Is Nothing Then
                         Return Nothing
                     Else
-                        Dim entropy As Byte() = GetDynamicEntropy()
+                        Dim entropy As Byte() = GetDynamicEntropy(Bdiu.BdiuHelper.PasswordFilePath, False)
                         Return System.Text.Encoding.UTF8.GetString(System.Security.Cryptography.ProtectedData.Unprotect(Me.BskyPasswordEncrypted, entropy, System.Security.Cryptography.DataProtectionScope.CurrentUser))
                     End If
                 End Get
@@ -398,7 +422,7 @@
                     If String.IsNullOrEmpty(passwordPlain) Then
                         Me.BskyPasswordEncrypted = Nothing
                     Else
-                        Dim entropy As Byte() = GetDynamicEntropy()
+                        Dim entropy As Byte() = GetDynamicEntropy(Bdiu.BdiuHelper.PasswordFilePath, True)
                         Me.BskyPasswordEncrypted = System.Security.Cryptography.ProtectedData.Protect(System.Text.Encoding.UTF8.GetBytes(passwordPlain), entropy, System.Security.Cryptography.DataProtectionScope.CurrentUser)
                     End If
                 End Set
@@ -492,6 +516,15 @@
                 If System.IO.File.Exists(Bdiu.BdiuHelper.PasswordFilePath) Then
                     Try
                         System.IO.File.Delete(Bdiu.BdiuHelper.PasswordFilePath)
+                    Catch ex As Exception
+
+                    End Try
+                End If
+
+                Dim pwEntrPth = EntropyPathForFilePath(Bdiu.BdiuHelper.PasswordFilePath)
+                If System.IO.File.Exists(pwEntrPth) Then
+                    Try
+                        System.IO.File.Delete(pwEntrPth)
                     Catch ex As Exception
 
                     End Try
