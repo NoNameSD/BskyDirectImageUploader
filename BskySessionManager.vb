@@ -439,6 +439,9 @@
             password,
             saveChecked) Then
 
+                    ' Delete the old credential files
+                    Call BskyCredentials.ClearCredentialFiles()
+
                     ' Success: Credentials captured successfully in plain text
                     ' Encrypt password natively via Windows Data Protection API (DPAPI)
                     Me.BskyHandle = userhandle
@@ -447,9 +450,6 @@
                     If saveChecked Then
                         ' Save credentials
                         Me.SaveToFile()
-                    Else
-                        ' Delete the old credential files
-                        BskyCredentials.ClearCredentialFiles()
                     End If
                 Else
                     ' Cancelled
@@ -467,6 +467,9 @@
             password,
             saveChecked) Then
 
+                    ' Delete the old credential files
+                    Call BskyCredentials.ClearCredentialFiles()
+
                     ' Success: Credentials captured successfully in plain text
                     ' Encrypt password natively via Windows Data Protection API (DPAPI)
                     Dim cred As New BskyCredentials(userhandle, password)
@@ -474,9 +477,6 @@
                     If saveChecked Then
                         ' Save credentials
                         cred.SaveToFile()
-                    Else
-                        ' Delete the old credential files
-                        BskyCredentials.ClearCredentialFiles()
                     End If
                     Return cred
                 Else

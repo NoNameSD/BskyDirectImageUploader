@@ -9,7 +9,7 @@
     <NeutralLanguage>en-GB</NeutralLanguage>
     <OptionStrict>On</OptionStrict>
     <SignAssembly>false</SignAssembly>
-    <Version>0.2.2.2</Version>
+    <Version>0.2.2.3</Version>
     <AppDesignerFolder>My Project</AppDesignerFolder>
     <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
     <DebugType>embedded</DebugType>
