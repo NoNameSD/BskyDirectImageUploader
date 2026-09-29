@@ -11,6 +11,8 @@
     <SignAssembly>false</SignAssembly>
     <Version>0.2.2.2</Version>
     <AppDesignerFolder>My Project</AppDesignerFolder>
+    <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
+    <DebugType>embedded</DebugType>
   </PropertyGroup>
 
   <ItemGroup>
