@@ -4,9 +4,6 @@ Option Strict On
 
 Namespace Bdiu
     Public Module BdiuHelper
-
-        Public Const IsDevelopmentVersion = True
-
         Public ReadOnly ColorWarning As Color = Color.FromArgb(&HE4, &HA1, &H1B)
 
         Public Const BackSlashChar As Char = "\"c
