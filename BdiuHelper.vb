@@ -37,7 +37,7 @@ Namespace Bdiu
             Dim userName As String = System.Environment.UserName
             Dim userNameBytes As Byte() = System.Text.Encoding.UTF8.GetBytes(userName)
 
-            ' Merge the varios Byte Arrays with XOR
+            ' Merge the various Byte Arrays with XOR
             Return MergeBytesXOR(MergeBytesXOR(prefixSalt, userNameBytes), suffixSalt)
         End Function
 
@@ -103,6 +103,7 @@ Namespace Bdiu
 
             Return outArray
         End Function
+
         Public Function CurrentCultureDateTimeFormat() As String
             ' Get the cultural settings of the current user's system
             Dim activeCulture As System.Globalization.CultureInfo = System.Globalization.CultureInfo.CurrentCulture
