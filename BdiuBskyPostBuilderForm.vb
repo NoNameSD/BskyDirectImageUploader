@@ -43,7 +43,7 @@ Public Class BdiuBskyPostBuilderForm
         AddHandler cboLanguageAdd.SelectedIndexChanged, AddressOf cboLanguageAdd_SelectedIndexChanged
 
         Me.cmbSetDateFromAttachType.Text = "Modified"
-        Me.btnSetCreatedAtByAttachments.Checked = True
+        Me.btnSetCreatedAtDuringPosting.Checked = True
         Call RefreshCreatedAtBox()
 
         If Me.BskyMgmt Is Nothing Then
