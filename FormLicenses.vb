@@ -23,5 +23,10 @@ Public Class FormLicenses
                     Nothing
         End Select
     End Sub
+
+    Private Sub FormLicenses_Load(sender As Object, e As EventArgs) Handles MyBase.Load
+        Me.Width = 700
+        Me.Height = 500
+    End Sub
 End Class
 #Enable Warning IDE1006

@@ -24,6 +24,7 @@ Partial Class OxiPngSelectForm
     'Do not modify it using the code editor.
     <System.Diagnostics.DebuggerStepThrough()>
     Private Sub InitializeComponent()
+        Dim resources As System.ComponentModel.ComponentResourceManager = New System.ComponentModel.ComponentResourceManager(GetType(OxiPngSelectForm))
         txtOxiPngPath = New TextBox()
         lblOxiPngPath = New Label()
         lblOxiPngDesc = New Label()
@@ -195,6 +196,7 @@ Partial Class OxiPngSelectForm
         Controls.Add(lblOxiPngDesc)
         Controls.Add(lblOxiPngPath)
         Controls.Add(txtOxiPngPath)
+        Icon = CType(resources.GetObject("$this.Icon"), Icon)
         Name = "OxiPngSelectForm"
         Text = "Optimize PNGs with Oxipng"
         grpImages.ResumeLayout(False)

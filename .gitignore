@@ -428,3 +428,4 @@ FodyWeavers.xsd
 
 #Ignore Unused Resources
 Resources/Unused
+/Icons/GitIgnore

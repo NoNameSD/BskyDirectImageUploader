@@ -331,7 +331,6 @@ Public Class BdiuBskyPostBuilderForm
 
     Private Sub PromptCredentialsInput()
         Dim subForm As New BdiuCredentialForm With {
-            .Icon = Me.Icon,
             .FormBorderStyle = FormBorderStyle.FixedDialog,
             .MaximizeBox = False,
             .MinimizeBox = False,
@@ -540,7 +539,6 @@ Public Class BdiuBskyPostBuilderForm
 
     Private Sub btnOpenOxiPngForm_Click(sender As Object, e As EventArgs) Handles btnOpenOxiPngForm.Click
         Dim subForm As New OxiPngSelectForm With {
-                .Icon = Me.Icon,
                 .StartPosition = FormStartPosition.CenterParent,
                 .OxiPngOpt = OxiPngOpt
             }

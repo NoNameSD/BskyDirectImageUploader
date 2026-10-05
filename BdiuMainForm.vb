@@ -27,7 +27,6 @@ Public Class BdiuMainForm
         ' Remove the maximize and minimize buttons (optional, but standard for dialogs)
         ' Center the dialog relative to the parent form (recommended)
         Dim subForm As New BdiuCredentialForm With {
-                .Icon = Me.Icon,
                 .FormBorderStyle = FormBorderStyle.FixedDialog,
                 .MaximizeBox = False,
                 .MinimizeBox = False,
@@ -44,7 +43,6 @@ Public Class BdiuMainForm
 
     Private Sub btnOxiPngForm_Click(sender As Object, e As EventArgs) Handles btnOxiPngForm.Click
         Dim subForm As New OxiPngSelectForm With {
-                .Icon = Me.Icon,
                 .StartPosition = FormStartPosition.CenterParent,
                 .OxiPngOpt = OxiPngOpt
             }

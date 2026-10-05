@@ -22,6 +22,7 @@ Partial Class BdiuMainForm
     'Do not modify it using the code editor.
     <System.Diagnostics.DebuggerStepThrough()>
     Private Sub InitializeComponent()
+        Dim resources As System.ComponentModel.ComponentResourceManager = New System.ComponentModel.ComponentResourceManager(GetType(BdiuMainForm))
         btnCreatePost = New Button()
         btnSetupBskyCredentials = New Button()
         btnOxiPngForm = New Button()
@@ -77,6 +78,7 @@ Partial Class BdiuMainForm
         Controls.Add(btnOxiPngForm)
         Controls.Add(btnSetupBskyCredentials)
         Controls.Add(btnCreatePost)
+        Icon = CType(resources.GetObject("$this.Icon"), Icon)
         Name = "BdiuMainForm"
         Text = "Bsky Direct Image Uploader"
         ResumeLayout(False)

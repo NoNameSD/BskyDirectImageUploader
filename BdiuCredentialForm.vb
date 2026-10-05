@@ -33,9 +33,13 @@ Public Class BdiuCredentialForm
             If credentialLoadSuccess Then
                 Me.txtBskyHandle.Text = Me.BskyMgmt.Credentials.BskyHandle
                 Me.rbtSetBskyPwd.Checked = True
+                Me.btnCopyPassword.Enabled = True
+                Me.btnLogin.Enabled = True
             Else
                 Me.txtBskyHandle.Text = Nothing
                 Me.rbtSetBskyPwd.Checked = False
+                Me.btnCopyPassword.Enabled = False
+                Me.btnLogin.Enabled = False
             End If
 
             If Not Me.BskyMgmt.BskyAgentIsAuthenticated Then
@@ -44,24 +48,30 @@ Public Class BdiuCredentialForm
 
             Me.rbtActiveSession.Checked = Me.BskyMgmt.BskyAgentIsAuthenticated
 
-            If Me.BskyMgmt.BskyAgent Is Nothing Then
-                Me.txtBskyDid.Text = Nothing
-                Call DisableSessionValidDatePicker()
-                Me.btnLogin.Enabled = True
-                Me.btnLogout.Enabled = False
-            Else
+            If Me.BskyMgmt.BskyAgent IsNot Nothing Then
                 Me.txtBskyDid.Text = Me.BskyMgmt.BskyAgent.Did
-                If Me.BskyMgmt.BskyAgent.Credentials IsNot Nothing Then
-                    Call EnableSessionValidDatePicker()
-                    Me.dtpSessionValid.Value = Me.BskyMgmt.BskyAgent.Credentials.ExpiresOn.LocalDateTime
-                    Me.dtpRefreshValid.Value = Bdiu.BskySessionManager.GetTokenExpiry(Me.BskyMgmt.BskyAgent.Credentials.RefreshToken).LocalDateTime
-                    Me.btnLogin.Enabled = False
-                    Me.btnLogout.Enabled = True
-                Else
-                    Call DisableSessionValidDatePicker()
-                    Me.btnLogin.Enabled = True
-                    Me.btnLogout.Enabled = False
-                End If
+            Else
+                Me.txtBskyDid.Text = Nothing
+            End If
+
+            If Me.BskyMgmt.BskyAgent IsNot Nothing AndAlso Me.BskyMgmt.BskyAgent.Credentials IsNot Nothing Then
+                Call EnableSessionValidDatePicker()
+                Me.dtpSessionValid.Value = Me.BskyMgmt.BskyAgent.Credentials.ExpiresOn.LocalDateTime
+                Me.dtpRefreshValid.Value = Bdiu.BskySessionManager.GetTokenExpiry(Me.BskyMgmt.BskyAgent.Credentials.RefreshToken).LocalDateTime
+                Me.btnLogout.Enabled = True
+                Me.btnRefreshSession.Enabled = True
+                Me.btnTestSession.Enabled = True
+                Me.btnSaveSession.Enabled = True
+                Me.btnCopySessionToken.Enabled = True
+                Me.btnCopyRefreshToken.Enabled = True
+            Else
+                Call DisableSessionValidDatePicker()
+                Me.btnLogout.Enabled = False
+                Me.btnRefreshSession.Enabled = False
+                Me.btnTestSession.Enabled = False
+                Me.btnSaveSession.Enabled = False
+                Me.btnCopySessionToken.Enabled = False
+                Me.btnCopyRefreshToken.Enabled = False
             End If
 
         Catch ex As Exception
@@ -131,9 +141,9 @@ Public Class BdiuCredentialForm
         If Me.BskyMgmt IsNot Nothing Then
             Dim ex As System.Exception = Nothing
             If Me.BskyMgmt.TestSession(ex) Then
-                Call MessageBox.Show(Me, $"The session is valid or was extended with the refresh token.", "Session valid", MessageBoxButtons.OK, MessageBoxIcon.Information)
+                Call MessageBox.Show(Me, $"The session was successfully validated with a test call.", "Session valid", MessageBoxButtons.OK, MessageBoxIcon.Information)
             Else
-                Dim message = $"The session is expired and could not be extended with the refresh token."
+                Dim message = $"The session is expired.{Environment.NewLine}It may be possible to extend the session by refreshing it."
                 If ex IsNot Nothing Then
                     message += $"{Environment.NewLine}{Environment.NewLine}{ex.Message}"
                 End If
@@ -171,6 +181,23 @@ Public Class BdiuCredentialForm
             End If
         End If
         Call RefreshForm()
+    End Sub
+
+    Private Sub btnCopyData_Click(sender As Object, e As EventArgs) Handles btnCopyPassword.Click, btnCopySessionToken.Click, btnCopyRefreshToken.Click
+        Try
+            Select Case True
+                Case sender Is btnCopyPassword
+                    Call System.Windows.Forms.Clipboard.SetText(Me.BskyMgmt.Credentials.BskyPasswordPlain, TextDataFormat.UnicodeText)
+                Case sender Is btnCopySessionToken
+                    Call System.Windows.Forms.Clipboard.SetText(Me.BskyMgmt.BskyAgent.Credentials.AccessJwt, TextDataFormat.Text)
+                Case sender Is btnCopyRefreshToken
+                    Call System.Windows.Forms.Clipboard.SetText(Me.BskyMgmt.BskyAgent.Credentials.RefreshToken, TextDataFormat.Text)
+                Case Else
+                    Call MessageBox.Show(Me, "No valid sender for credentials copy", "Invalid sender", MessageBoxButtons.OK, MessageBoxIcon.Exclamation)
+            End Select
+        Catch ex As Exception
+            Call Bdiu.BDIUExceptionDisplay.DisplayExceptionAsMessageBox(Me, ex)
+        End Try
     End Sub
 End Class
 #Enable Warning IDE1006 ' Naming Styles

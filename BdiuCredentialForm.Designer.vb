@@ -22,6 +22,7 @@ Partial Class BdiuCredentialForm
     'Do not modify it using the code editor.
     <System.Diagnostics.DebuggerStepThrough()> _
     Private Sub InitializeComponent()
+        Dim resources As System.ComponentModel.ComponentResourceManager = New System.ComponentModel.ComponentResourceManager(GetType(BdiuCredentialForm))
         btnEnterCredentials = New Button()
         txtBskyHandle = New TextBox()
         rbtSetBskyPwd = New RadioButton()
@@ -41,15 +42,18 @@ Partial Class BdiuCredentialForm
         lblRefreshValid = New Label()
         dtpRefreshValid = New ReadOnlyDateTimePicker()
         btnRefreshSession = New Button()
+        btnCopyPassword = New Button()
+        btnCopySessionToken = New Button()
+        btnCopyRefreshToken = New Button()
         SuspendLayout()
         ' 
         ' btnEnterCredentials
         ' 
         btnEnterCredentials.Anchor = AnchorStyles.Bottom Or AnchorStyles.Right
-        btnEnterCredentials.Location = New Point(178, 351)
+        btnEnterCredentials.Location = New Point(178, 374)
         btnEnterCredentials.Name = "btnEnterCredentials"
         btnEnterCredentials.Size = New Size(145, 29)
-        btnEnterCredentials.TabIndex = 17
+        btnEnterCredentials.TabIndex = 20
         btnEnterCredentials.Text = "Set credentials"
         btnEnterCredentials.UseVisualStyleBackColor = True
         ' 
@@ -69,10 +73,9 @@ Partial Class BdiuCredentialForm
         rbtSetBskyPwd.AutoSize = True
         rbtSetBskyPwd.Location = New Point(109, 111)
         rbtSetBskyPwd.Name = "rbtSetBskyPwd"
-        rbtSetBskyPwd.Size = New Size(143, 19)
+        rbtSetBskyPwd.Size = New Size(93, 19)
         rbtSetBskyPwd.TabIndex = 3
-        rbtSetBskyPwd.TabStop = True
-        rbtSetBskyPwd.Text = "Password has been set"
+        rbtSetBskyPwd.Text = "Password set"
         rbtSetBskyPwd.UseVisualStyleBackColor = True
         ' 
         ' lblBskyHandle
@@ -96,10 +99,10 @@ Partial Class BdiuCredentialForm
         ' btnClearCredentials
         ' 
         btnClearCredentials.Anchor = AnchorStyles.Bottom Or AnchorStyles.Left
-        btnClearCredentials.Location = New Point(12, 351)
+        btnClearCredentials.Location = New Point(12, 374)
         btnClearCredentials.Name = "btnClearCredentials"
         btnClearCredentials.Size = New Size(145, 29)
-        btnClearCredentials.TabIndex = 16
+        btnClearCredentials.TabIndex = 19
         btnClearCredentials.Text = "Clear credentials"
         btnClearCredentials.UseVisualStyleBackColor = True
         ' 
@@ -130,7 +133,6 @@ Partial Class BdiuCredentialForm
         rbtActiveSession.Name = "rbtActiveSession"
         rbtActiveSession.Size = New Size(142, 19)
         rbtActiveSession.TabIndex = 6
-        rbtActiveSession.TabStop = True
         rbtActiveSession.Text = "Active Bluesky session"
         rbtActiveSession.UseVisualStyleBackColor = True
         ' 
@@ -138,20 +140,20 @@ Partial Class BdiuCredentialForm
         ' 
         btnLogout.Anchor = AnchorStyles.Bottom Or AnchorStyles.Left
         btnLogout.ImageKey = "(none)"
-        btnLogout.Location = New Point(12, 316)
+        btnLogout.Location = New Point(12, 339)
         btnLogout.Name = "btnLogout"
         btnLogout.Size = New Size(145, 29)
-        btnLogout.TabIndex = 14
+        btnLogout.TabIndex = 17
         btnLogout.Text = "Logout session"
         btnLogout.UseVisualStyleBackColor = True
         ' 
         ' btnLogin
         ' 
         btnLogin.Anchor = AnchorStyles.Bottom Or AnchorStyles.Right
-        btnLogin.Location = New Point(178, 316)
+        btnLogin.Location = New Point(178, 339)
         btnLogin.Name = "btnLogin"
         btnLogin.Size = New Size(145, 29)
-        btnLogin.TabIndex = 15
+        btnLogin.TabIndex = 18
         btnLogin.Text = "Login session"
         btnLogin.UseVisualStyleBackColor = True
         ' 
@@ -176,30 +178,31 @@ Partial Class BdiuCredentialForm
         ' 
         ' lblTokenInfo
         ' 
+        lblTokenInfo.Anchor = AnchorStyles.Bottom Or AnchorStyles.Left
         lblTokenInfo.AutoSize = True
-        lblTokenInfo.Location = New Point(12, 249)
+        lblTokenInfo.Location = New Point(12, 272)
         lblTokenInfo.Name = "lblTokenInfo"
         lblTokenInfo.Size = New Size(271, 30)
-        lblTokenInfo.TabIndex = 11
+        lblTokenInfo.TabIndex = 13
         lblTokenInfo.Text = "Please note that the refresh token can expire " & vbCrLf & "before the date above due to prolonged inactivity." & vbCrLf
         ' 
         ' btnTestSession
         ' 
         btnTestSession.Anchor = AnchorStyles.Bottom Or AnchorStyles.Right
-        btnTestSession.Location = New Point(129, 285)
+        btnTestSession.Location = New Point(129, 308)
         btnTestSession.Name = "btnTestSession"
         btnTestSession.Size = New Size(94, 23)
-        btnTestSession.TabIndex = 12
+        btnTestSession.TabIndex = 15
         btnTestSession.Text = "Test Session"
         btnTestSession.UseVisualStyleBackColor = True
         ' 
         ' btnSaveSession
         ' 
         btnSaveSession.Anchor = AnchorStyles.Bottom Or AnchorStyles.Right
-        btnSaveSession.Location = New Point(229, 285)
+        btnSaveSession.Location = New Point(229, 308)
         btnSaveSession.Name = "btnSaveSession"
         btnSaveSession.Size = New Size(94, 23)
-        btnSaveSession.TabIndex = 13
+        btnSaveSession.TabIndex = 16
         btnSaveSession.Text = "Save Session"
         btnSaveSession.UseVisualStyleBackColor = True
         ' 
@@ -225,18 +228,51 @@ Partial Class BdiuCredentialForm
         ' btnRefreshSession
         ' 
         btnRefreshSession.Anchor = AnchorStyles.Bottom Or AnchorStyles.Right
-        btnRefreshSession.Location = New Point(12, 285)
+        btnRefreshSession.Location = New Point(12, 308)
         btnRefreshSession.Name = "btnRefreshSession"
         btnRefreshSession.Size = New Size(111, 23)
-        btnRefreshSession.TabIndex = 11
+        btnRefreshSession.TabIndex = 14
         btnRefreshSession.Text = "Refresh Session"
         btnRefreshSession.UseVisualStyleBackColor = True
+        ' 
+        ' btnCopyPassword
+        ' 
+        btnCopyPassword.Anchor = AnchorStyles.Top Or AnchorStyles.Right
+        btnCopyPassword.Location = New Point(212, 109)
+        btnCopyPassword.Name = "btnCopyPassword"
+        btnCopyPassword.Size = New Size(111, 23)
+        btnCopyPassword.TabIndex = 4
+        btnCopyPassword.Text = "Copy password"
+        btnCopyPassword.UseVisualStyleBackColor = True
+        ' 
+        ' btnCopySessionToken
+        ' 
+        btnCopySessionToken.Anchor = AnchorStyles.Bottom Or AnchorStyles.Left
+        btnCopySessionToken.Location = New Point(12, 246)
+        btnCopySessionToken.Name = "btnCopySessionToken"
+        btnCopySessionToken.Size = New Size(145, 23)
+        btnCopySessionToken.TabIndex = 11
+        btnCopySessionToken.Text = "Copy session token"
+        btnCopySessionToken.UseVisualStyleBackColor = True
+        ' 
+        ' btnCopyRefreshToken
+        ' 
+        btnCopyRefreshToken.Anchor = AnchorStyles.Bottom Or AnchorStyles.Right
+        btnCopyRefreshToken.Location = New Point(178, 246)
+        btnCopyRefreshToken.Name = "btnCopyRefreshToken"
+        btnCopyRefreshToken.Size = New Size(145, 23)
+        btnCopyRefreshToken.TabIndex = 12
+        btnCopyRefreshToken.Text = "Copy refresh token"
+        btnCopyRefreshToken.UseVisualStyleBackColor = True
         ' 
         ' BdiuCredentialForm
         ' 
         AutoScaleDimensions = New SizeF(7F, 15F)
         AutoScaleMode = AutoScaleMode.Font
-        ClientSize = New Size(335, 392)
+        ClientSize = New Size(335, 415)
+        Controls.Add(btnCopyRefreshToken)
+        Controls.Add(btnCopySessionToken)
+        Controls.Add(btnCopyPassword)
         Controls.Add(btnRefreshSession)
         Controls.Add(lblRefreshValid)
         Controls.Add(dtpRefreshValid)
@@ -256,6 +292,7 @@ Partial Class BdiuCredentialForm
         Controls.Add(rbtSetBskyPwd)
         Controls.Add(txtBskyHandle)
         Controls.Add(btnEnterCredentials)
+        Icon = CType(resources.GetObject("$this.Icon"), Icon)
         Name = "BdiuCredentialForm"
         Text = "Setup Bluesky App Password"
         ResumeLayout(False)
@@ -281,4 +318,7 @@ Partial Class BdiuCredentialForm
     Friend WithEvents lblRefreshValid As Label
     Friend WithEvents dtpRefreshValid As ReadOnlyDateTimePicker
     Friend WithEvents btnRefreshSession As Button
+    Friend WithEvents btnCopyPassword As Button
+    Friend WithEvents btnCopySessionToken As Button
+    Friend WithEvents btnCopyRefreshToken As Button
 End Class
