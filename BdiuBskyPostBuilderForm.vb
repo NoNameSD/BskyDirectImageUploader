@@ -4,11 +4,13 @@ Public Class BdiuBskyPostBuilderForm
 
     Const BskyMaxImageSize As Long = 2000000
 
-    'Private imagesArray As New List(Of Dictionary(Of String, String))()
-    'Private warningLabels As New HashSet(Of String)
     Private postData As New Bdiu.BskyUploadPostData
 
     Friend Event WarningLabelsUpdated()
+
+    ' Bluesky's strict limits
+    Private ReadOnly MaxGraphemes As Integer = idunno.Bluesky.Maximum.PostLengthInGraphemes
+    Private ReadOnly MaxBytes As Integer = idunno.Bluesky.Maximum.PostLengthInBytes
 
     <System.ComponentModel.DesignerSerializationVisibility(System.ComponentModel.DesignerSerializationVisibility.Hidden)>
     Public Property BskyMgmt As BskyDirectImageUploader.Bdiu.BskySessionManager
@@ -29,14 +31,8 @@ Public Class BdiuBskyPostBuilderForm
         Me.ucLog.Logger = New Logger.Logger(Byte.MaxValue)
         Me.ucLog.MaxLogEntriesNUD.Value = Me.ucLog.Logger.MaxEntries
 
-        ' Check if we received images directly via Windows Drag & Drop onto the .exe icon
-        Dim args As String() = Environment.GetCommandLineArgs()
-        If args.Length > 1 Then
-            Call AddImagesSecurely(args, True)
-        End If
-
         Call Me.UpdateCharCount()
-        Call Me.SetImageDataOnForm()
+        Call Me.SetAttachmentDataOnForm()
         RemoveHandler cboLanguageAdd.SelectedIndexChanged, AddressOf cboLanguageAdd_SelectedIndexChanged
         Call Me.SetLanguageBoxData()
         Call Me.RefreshLanguageTextBox()
@@ -124,34 +120,28 @@ Public Class BdiuBskyPostBuilderForm
 
     Private Sub BskyPostBuilder_DragDrop(sender As Object, e As DragEventArgs) Handles Me.DragDrop
         Dim files As String() = CType(e.Data.GetData(DataFormats.FileDrop), String())
-        Call AddImagesSecurely(files, False)
+        Call Me.AddAttachmentsSecurely(files)
     End Sub
 
-    Private Sub RemoveAllImages()
-        If Me.postData.Images IsNot Nothing Then
-            Call Me.postData.Images.Clear()
+    Private Sub RemoveAllAttachments()
+        If Me.postData.Attachments IsNot Nothing Then
+            Call Me.postData.Attachments.Clear()
         End If
-        Call lstImages.Items.Clear()
+        Call lstAttachments.Items.Clear()
         Me.txtAltText.Text = Nothing
         Me.txtAltText.Enabled = False
         Me.txtMimeType.Text = Nothing
         Me.txtMimeType.Enabled = False
-        Call Me.ClearImageDimensionsNud()
+        Call Me.ClearAttachmentDimensionsNud()
         Me.nudWidth.Enabled = False
         Me.nudHeight.Enabled = False
     End Sub
 
-    Private Sub AddImagesSecurely(paths() As String, onlyAllowSafeFileTypesToAdd As Boolean)
+    Private Sub AddAttachmentsSecurely(paths() As String)
         For Each path In paths
 
             Dim ext As String = IO.Path.GetExtension(path).ToLower()
             Dim fileName As String = IO.Path.GetFileName(path)
-
-            If onlyAllowSafeFileTypesToAdd Then
-                Dim allowedExts As String() = {".png", ".jpg", ".jpeg", ".jfif", ".webp", ".avif"}
-
-                If Not allowedExts.Contains(ext) Then Return
-            End If
 
             ' Strict 2MB Server limit verification
             Dim fileInfo As New System.IO.FileInfo(path)
@@ -170,44 +160,44 @@ Public Class BdiuBskyPostBuilderForm
                 End If
             End If
 
-            If Me.postData.Images IsNot Nothing Then
-                If Me.postData.Images.Count = 10 Then
+            If Me.postData.Attachments IsNot Nothing Then
+                If Me.postData.Attachments.Count = 10 Then
                     If MessageBox.Show($"10 images already added.{Environment.NewLine}Bluesky technically allows up to 20 images per post, but will only display the first 10 on the site.{Environment.NewLine}{Environment.NewLine}Add more regardless?", "Soft Limit Reached", MessageBoxButtons.YesNo, MessageBoxIcon.Warning) <> DialogResult.Yes Then
                         Return
                     End If
                 End If
-                If Me.postData.Images.Count = 20 Then
+                If Me.postData.Attachments.Count = 20 Then
                     If MessageBox.Show($"20 images already added.{Environment.NewLine}Bluesky will reject this post, if you add more images.{Environment.NewLine}{Environment.NewLine}Add more regardless?", "Hard Limit Reached", MessageBoxButtons.YesNo, MessageBoxIcon.Warning) <> DialogResult.Yes Then
                         Return
                     End If
                 End If
             End If
 
-            ' Add to new image data object
-            Dim imgData As New Bdiu.BskyUploadPostData.BskyUploadImageData(filePath:=path)
+            ' Add to new attachment data object
+            Dim attchData As New Bdiu.BskyUploadPostData.BskyUploadAttachmentData(filePath:=path)
 
-            ' Get the image dimensions and mimetype of the file
+            ' Get the dimensions and mimetype of the file
             Try
-                Call imgData.LoadImageData()
+                Call attchData.LoadAttachmentData()
             Catch ex As Exception
-                ' Ignore exceptions when reading the image metadata
+                ' Ignore exceptions when reading the metadata
             End Try
-            Me.postData.AddImage(imgData)
+            Me.postData.AddAttachment(attchData)
 
-            Call Me.AddToLog($"Added image {fileName}", False)
-            If imgData.Dimensions IsNot Nothing Then
-                Call Me.AddToLog($"Read dimensions {imgData.Dimensions.Width} x {imgData.Dimensions.Height} from {fileName}", False)
+            Call Me.AddToLog($"Added file {fileName}", False)
+            If attchData.Dimensions IsNot Nothing Then
+                Call Me.AddToLog($"Read dimensions {attchData.Dimensions.Width} x {attchData.Dimensions.Height} from {fileName}", False)
             Else
-                Call Me.AddToLog($"Warning: No image dimensions read from {fileName}", Bdiu.BdiuHelper.ColorWarning)
+                Call Me.AddToLog($"Warning: No dimensions read from {fileName}", Bdiu.BdiuHelper.ColorWarning)
             End If
-            If String.IsNullOrWhiteSpace(imgData.MimeType) Then
+            If String.IsNullOrWhiteSpace(attchData.MimeType) Then
                 Call Me.AddToLog($"Warning: No MIME-Type read from {fileName}", Bdiu.BdiuHelper.ColorWarning)
             Else
-                Call Me.AddToLog($"Read MIME-Type {imgData.MimeType} from {fileName}", False)
+                Call Me.AddToLog($"Read MIME-Type {attchData.MimeType} from {fileName}", False)
             End If
 
-            ' Image list displayed to user
-            Call lstImages.Items.Add(fileName)
+            ' Attachment list displayed to user
+            Call lstAttachments.Items.Add(fileName)
         Next
         Call Me.RefreshCreatedAtBox()
     End Sub
@@ -219,10 +209,6 @@ Public Class BdiuBskyPostBuilderForm
 
     Private Sub UpdateCharCount()
         Dim text As String = txtCaption.Text
-
-        ' Bluesky's strict limits
-        Const MaxGraphemes As Integer = 300
-        Const MaxBytes As Integer = 3000
 
         ' 1. Count Grapheme Clusters (Visual characters like Bluesky)
         ' Use StringInfo to correctly split text by text elements (graphemes)
@@ -257,7 +243,7 @@ Public Class BdiuBskyPostBuilderForm
     End Sub
 
     Public Sub DisableFormForProcess()
-        Me.grpImages.Enabled = False
+        Me.grpAttachments.Enabled = False
         Me.grpReplyTo.Enabled = False
         Me.grpCaption.Enabled = False
         Me.grpLabels.Enabled = False
@@ -266,7 +252,7 @@ Public Class BdiuBskyPostBuilderForm
         Me.btnCancel.Enabled = True
     End Sub
     Public Sub EnableFormAfterProcessFinish()
-        Me.grpImages.Enabled = True
+        Me.grpAttachments.Enabled = True
         Me.grpReplyTo.Enabled = True
         Me.grpCaption.Enabled = True
         Me.grpLabels.Enabled = True
@@ -349,8 +335,8 @@ Public Class BdiuBskyPostBuilderForm
     End Function
 
     Private Async Function OptimizePngFiles(ct As System.Threading.CancellationToken) As Task(Of Boolean)
-        If Me.postData.Images Is Nothing Then
-            Call AddToLog("No Images provided. Skip PNG optimization.", Color.DarkGray)
+        If Me.postData.Attachments Is Nothing Then
+            Call AddToLog("No attachments provided. Skip PNG optimization.", Color.DarkGray)
             Return True
         End If
 
@@ -358,7 +344,7 @@ Public Class BdiuBskyPostBuilderForm
         Dim allowedExts As String() = {".png", ".apng"}
 
 
-        For Each image In Me.postData.Images
+        For Each image In Me.postData.Attachments
             Dim imagePath = image.FilePath
 
             If allowedExts.Contains(System.IO.Path.GetExtension(imagePath)) Then
@@ -368,7 +354,7 @@ Public Class BdiuBskyPostBuilderForm
 
 
         If pngFiles.Count = 0 Then
-            Call AddToLog("None of the provided images is a PNG. Skip optimization.", Color.DarkGray)
+            Call AddToLog("None of the provided attachments is a PNG. Skip optimization.", Color.DarkGray)
             Return True
         End If
 
@@ -397,43 +383,43 @@ Public Class BdiuBskyPostBuilderForm
         End If
     End Function
 
-    Private Sub lstImages_SelectedIndexChanged(sender As Object, e As EventArgs) Handles lstImages.SelectedIndexChanged
-        Call SetImageDataOnForm()
+    Private Sub lstAttachments_SelectedIndexChanged(sender As Object, e As EventArgs) Handles lstAttachments.SelectedIndexChanged
+        Call Me.SetAttachmentDataOnForm()
     End Sub
 
     Private Sub SetAltTextBoxData()
-        If lstImages.SelectedIndex = -1 OrElse Me.postData.Images Is Nothing OrElse Me.postData.Images.Count = 0 Then
+        If lstAttachments.SelectedIndex = -1 OrElse Me.postData.Attachments Is Nothing OrElse Me.postData.Attachments.Count = 0 Then
             Me.txtAltText.Enabled = False
         Else
-            Me.txtAltText.Text = Me.postData.Images.Item(lstImages.SelectedIndex).AltText
+            Me.txtAltText.Text = Me.postData.Attachments.Item(lstAttachments.SelectedIndex).AltText
             Me.txtAltText.Enabled = True
         End If
     End Sub
 
     Private Sub txtAltText_Validated(sender As Object, e As EventArgs) Handles txtAltText.Validated
-        If lstImages.SelectedIndex = -1 OrElse Me.postData.Images Is Nothing OrElse Me.postData.Images.Count = 0 Then
+        If lstAttachments.SelectedIndex = -1 OrElse Me.postData.Attachments Is Nothing OrElse Me.postData.Attachments.Count = 0 Then
             Exit Sub
         End If
-        Me.postData.Images.Item(lstImages.SelectedIndex).AltText = Me.txtAltText.Text
+        Me.postData.Attachments.Item(lstAttachments.SelectedIndex).AltText = Me.txtAltText.Text
     End Sub
 
     Private Sub txtMimeType_Validated(sender As Object, e As EventArgs) Handles txtMimeType.Validated
-        If lstImages.SelectedIndex = -1 OrElse Me.postData.Images Is Nothing OrElse Me.postData.Images.Count = 0 Then
+        If lstAttachments.SelectedIndex = -1 OrElse Me.postData.Attachments Is Nothing OrElse Me.postData.Attachments.Count = 0 Then
             Exit Sub
         End If
-        Me.postData.Images.Item(lstImages.SelectedIndex).MimeType = Me.txtMimeType.Text
+        Me.postData.Attachments.Item(lstAttachments.SelectedIndex).MimeType = Me.txtMimeType.Text
     End Sub
 
     Private Sub SetMimeTypeTextBoxData()
-        If lstImages.SelectedIndex = -1 OrElse Me.postData.Images Is Nothing OrElse Me.postData.Images.Count = 0 Then
+        If lstAttachments.SelectedIndex = -1 OrElse Me.postData.Attachments Is Nothing OrElse Me.postData.Attachments.Count = 0 Then
             Me.txtMimeType.Enabled = False
         Else
-            Me.txtMimeType.Text = Me.postData.Images.Item(lstImages.SelectedIndex).MimeType
+            Me.txtMimeType.Text = Me.postData.Attachments.Item(lstAttachments.SelectedIndex).MimeType
             Me.txtMimeType.Enabled = True
         End If
     End Sub
 
-    Private Sub btnSelectImg_Click(sender As Object, e As EventArgs) Handles btnSelectImg.Click
+    Private Sub btnSelectAttch_Click(sender As Object, e As EventArgs) Handles btnSelectAttch.Click
         Dim FileDialog As New OpenFileDialog With {
             .Filter = "Bluesky Supported Images (*.png;*.jpg;*.jpeg;*.jfif;*.webp;*.avif;*.svg)|*.png;*.jpg;*.jpeg;*.jfif;*.webp;*.avif,*.svg|All Files (*.*)|*.*",
             .Multiselect = True,
@@ -445,12 +431,12 @@ Public Class BdiuBskyPostBuilderForm
         Dim DialogResult As DialogResult = FileDialog.ShowDialog(DummyForm)
 
         If DialogResult = DialogResult.OK Then
-            Call Me.AddImagesSecurely(FileDialog.FileNames, False)
+            Call Me.AddAttachmentsSecurely(FileDialog.FileNames)
         End If
     End Sub
 
-    Private Sub btnClearImg_Click(sender As Object, e As EventArgs) Handles btnClearImg.Click
-        Call RemoveAllImages()
+    Private Sub btnClearAttch_Click(sender As Object, e As EventArgs) Handles btnClearAttch.Click
+        Call RemoveAllAttachments()
     End Sub
 
     Private Sub chkSexual_CheckedChanged(sender As Object, e As EventArgs) Handles chkSexual.CheckedChanged
@@ -565,51 +551,51 @@ Public Class BdiuBskyPostBuilderForm
         End If
     End Sub
 
-    Private Sub SetImageDataOnForm()
-        Call Me.SetImageDimensionsData()
+    Private Sub SetAttachmentDataOnForm()
+        Call Me.SetAttachmentDimensionsData()
         Call Me.SetAltTextBoxData()
         Call Me.SetMimeTypeTextBoxData()
     End Sub
 
-    Private Sub ClearImageDimensionsNud()
-        Call ClearImageWidthNud()
-        Call ClearImageHeightNud()
+    Private Sub ClearAttachmentDimensionsNud()
+        Call ClearAttachmentWidthNud()
+        Call ClearAttachmentHeightNud()
     End Sub
-    Private Sub ClearImageWidthNud()
+    Private Sub ClearAttachmentWidthNud()
         Me.nudWidth.Value = 0
         Me.nudWidth.Text = Nothing
     End Sub
-    Private Sub ClearImageHeightNud()
+    Private Sub ClearAttachmentHeightNud()
         Me.nudHeight.Value = 0
         Me.nudHeight.Text = Nothing
     End Sub
 
-    Private Sub SetImageDimensionsData()
+    Private Sub SetAttachmentDimensionsData()
 
-        If lstImages.SelectedIndex = -1 OrElse Me.postData.Images Is Nothing OrElse Me.postData.Images.Count = 0 Then
+        If lstAttachments.SelectedIndex = -1 OrElse Me.postData.Attachments Is Nothing OrElse Me.postData.Attachments.Count = 0 Then
             Me.nudWidth.Enabled = False
             Me.nudHeight.Enabled = False
-            Call ClearImageDimensionsNud()
+            Call Me.ClearAttachmentDimensionsNud()
         Else
-            Dim imgDim = Me.postData.Images.Item(lstImages.SelectedIndex).Dimensions
+            Dim attchDim = Me.postData.Attachments.Item(lstAttachments.SelectedIndex).Dimensions
 
-            If imgDim IsNot Nothing Then
-                If imgDim.Width.HasValue Then
-                    Dim val = imgDim.Width.Value
+            If attchDim IsNot Nothing Then
+                If attchDim.Width.HasValue Then
+                    Dim val = attchDim.Width.Value
                     Me.nudWidth.Text = CStr(val)
                     Me.nudWidth.Value = val
                 Else
-                    Call ClearImageWidthNud()
+                    Call Me.ClearAttachmentWidthNud()
                 End If
-                If imgDim.Height.HasValue Then
-                    Dim val = imgDim.Height.Value
+                If attchDim.Height.HasValue Then
+                    Dim val = attchDim.Height.Value
                     Me.nudHeight.Text = CStr(val)
                     Me.nudHeight.Value = val
                 Else
-                    Call ClearImageHeightNud()
+                    Call Me.ClearAttachmentHeightNud()
                 End If
             Else
-                Call ClearImageDimensionsNud()
+                Call Me.ClearAttachmentDimensionsNud()
             End If
             Me.nudWidth.Enabled = True
             Me.nudHeight.Enabled = True
@@ -617,54 +603,54 @@ Public Class BdiuBskyPostBuilderForm
     End Sub
 
     Private Sub nudWidth_Leave(sender As Object, e As EventArgs) Handles nudWidth.Leave
-        If lstImages.SelectedIndex = -1 OrElse Me.postData.Images Is Nothing OrElse Me.postData.Images.Count = 0 Then
+        If lstAttachments.SelectedIndex = -1 OrElse Me.postData.Attachments Is Nothing OrElse Me.postData.Attachments.Count = 0 Then
         Else
-            Dim imgDim = Me.postData.Images.Item(lstImages.SelectedIndex).Dimensions
+            Dim attchDim = Me.postData.Attachments.Item(lstAttachments.SelectedIndex).Dimensions
 
-            If imgDim IsNot Nothing Then
+            If attchDim IsNot Nothing Then
                 If String.IsNullOrWhiteSpace(Me.nudWidth.Text) Then
-                    imgDim.Width = Nothing
-                    Call SetImageDimensionsData()
+                    attchDim.Width = Nothing
+                    Call Me.SetAttachmentDimensionsData()
                 Else
                     Select Case Me.nudWidth.Value
                         Case 0, > UInt32.MaxValue, < UInt32.MinValue
-                            imgDim.Width = Nothing
+                            attchDim.Width = Nothing
                         Case Else
-                            imgDim.Width = CType(Me.nudWidth.Value, System.UInt32)
+                            attchDim.Width = CType(Me.nudWidth.Value, System.UInt32)
                     End Select
                 End If
             Else
                 Select Case Me.nudWidth.Value
                     Case 0, > UInt32.MaxValue, < UInt32.MinValue
                     Case Else
-                        Me.postData.Images.Item(lstImages.SelectedIndex).Dimensions = New Bdiu.BskyUploadPostData.BskyUploadImageData.ImageDimensions(CType(Me.nudWidth.Value, System.UInt32), 0)
+                        Me.postData.Attachments.Item(lstAttachments.SelectedIndex).Dimensions = New Bdiu.BskyUploadPostData.BskyUploadAttachmentData.ImageDimensions(CType(Me.nudWidth.Value, System.UInt32), 0)
                 End Select
             End If
         End If
     End Sub
 
     Private Sub nudHeight_Leave(sender As Object, e As EventArgs) Handles nudHeight.Leave
-        If lstImages.SelectedIndex = -1 OrElse Me.postData.Images Is Nothing OrElse Me.postData.Images.Count = 0 Then
+        If lstAttachments.SelectedIndex = -1 OrElse Me.postData.Attachments Is Nothing OrElse Me.postData.Attachments.Count = 0 Then
         Else
-            Dim imgDim = Me.postData.Images.Item(lstImages.SelectedIndex).Dimensions
+            Dim attchDim = Me.postData.Attachments.Item(lstAttachments.SelectedIndex).Dimensions
 
-            If imgDim IsNot Nothing Then
+            If attchDim IsNot Nothing Then
                 If String.IsNullOrWhiteSpace(Me.nudHeight.Text) Then
-                    imgDim.Height = Nothing
-                    Call SetImageDimensionsData()
+                    attchDim.Height = Nothing
+                    Call Me.SetAttachmentDimensionsData()
                 Else
                     Select Case Me.nudHeight.Value
                         Case 0, > UInt32.MaxValue, < UInt32.MinValue
-                            imgDim.Height = Nothing
+                            attchDim.Height = Nothing
                         Case Else
-                            imgDim.Height = CType(Me.nudHeight.Value, System.UInt32)
+                            attchDim.Height = CType(Me.nudHeight.Value, System.UInt32)
                     End Select
                 End If
             Else
                 Select Case Me.nudHeight.Value
                     Case 0, > UInt32.MaxValue, < UInt32.MinValue
                     Case Else
-                        Me.postData.Images.Item(lstImages.SelectedIndex).Dimensions = New Bdiu.BskyUploadPostData.BskyUploadImageData.ImageDimensions(0, CType(Me.nudHeight.Value, System.UInt32))
+                        Me.postData.Attachments.Item(lstAttachments.SelectedIndex).Dimensions = New Bdiu.BskyUploadPostData.BskyUploadAttachmentData.ImageDimensions(0, CType(Me.nudHeight.Value, System.UInt32))
                 End Select
             End If
         End If
@@ -744,7 +730,7 @@ Public Class BdiuBskyPostBuilderForm
         Else
             RemoveHandler dtpCreatedAt.ValueChanged, AddressOf dtpCreatedAt_ValueChanged
             RemoveHandler txtCreatedAt.Validated, AddressOf txtCreatedAt_Validated
-            If Me.btnSetCreatedAtByAttachments.Checked AndAlso Me.postData.Images IsNot Nothing AndAlso Me.postData.Images.Count > 0 Then
+            If Me.btnSetCreatedAtByAttachments.Checked AndAlso Me.postData.Attachments IsNot Nothing AndAlso Me.postData.Attachments.Count > 0 Then
                 If Me.cmbSetDateFromAttachType.Text.Equals("Created", StringComparison.OrdinalIgnoreCase) Then
                     Me.postData.CreatedAt = Me.postData.GetMaxCreatedAttachmentDate
                 Else

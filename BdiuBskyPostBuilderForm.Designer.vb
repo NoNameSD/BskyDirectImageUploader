@@ -24,7 +24,7 @@ Partial Class BdiuBskyPostBuilderForm
     Private Sub InitializeComponent()
         txtCaption = New TextBox()
         txtReplyUrl = New TextBox()
-        lstImages = New ListBox()
+        lstAttachments = New ListBox()
         lblGraphemeCount = New Label()
         chkSexual = New CheckBox()
         chkNudity = New CheckBox()
@@ -36,16 +36,16 @@ Partial Class BdiuBskyPostBuilderForm
         grpCaption = New GroupBox()
         lblByteCount = New Label()
         cboLanguageAdd = New ComboBox()
-        grpImages = New GroupBox()
+        grpAttachments = New GroupBox()
         txtMimeType = New TextBox()
         lblMimeType = New Label()
         lblHeight = New Label()
         nudHeight = New NumericUpDown()
         lblWidth = New Label()
         nudWidth = New NumericUpDown()
-        btnClearImg = New Button()
+        btnClearAttch = New Button()
         txtAltText = New TextBox()
-        btnSelectImg = New Button()
+        btnSelectAttch = New Button()
         chkOptPng = New CheckBox()
         btnOpenOxiPngForm = New Button()
         grpReplyTo = New GroupBox()
@@ -66,7 +66,7 @@ Partial Class BdiuBskyPostBuilderForm
         btnSetCreatedAtByAttachments = New CheckBox()
         grpLabels.SuspendLayout()
         grpCaption.SuspendLayout()
-        grpImages.SuspendLayout()
+        grpAttachments.SuspendLayout()
         CType(nudHeight, ComponentModel.ISupportInitialize).BeginInit()
         CType(nudWidth, ComponentModel.ISupportInitialize).BeginInit()
         grpReplyTo.SuspendLayout()
@@ -94,14 +94,14 @@ Partial Class BdiuBskyPostBuilderForm
         txtReplyUrl.Size = New Size(402, 23)
         txtReplyUrl.TabIndex = 12
         ' 
-        ' lstImages
+        ' lstAttachments
         ' 
-        lstImages.Anchor = AnchorStyles.Top Or AnchorStyles.Left Or AnchorStyles.Right
-        lstImages.FormattingEnabled = True
-        lstImages.Location = New Point(6, 48)
-        lstImages.Name = "lstImages"
-        lstImages.Size = New Size(239, 64)
-        lstImages.TabIndex = 3
+        lstAttachments.Anchor = AnchorStyles.Top Or AnchorStyles.Left Or AnchorStyles.Right
+        lstAttachments.FormattingEnabled = True
+        lstAttachments.Location = New Point(6, 48)
+        lstAttachments.Name = "lstAttachments"
+        lstAttachments.Size = New Size(239, 64)
+        lstAttachments.TabIndex = 3
         ' 
         ' lblGraphemeCount
         ' 
@@ -226,27 +226,27 @@ Partial Class BdiuBskyPostBuilderForm
         cboLanguageAdd.Size = New Size(236, 23)
         cboLanguageAdd.TabIndex = 19
         ' 
-        ' grpImages
+        ' grpAttachments
         ' 
-        grpImages.Anchor = AnchorStyles.Top Or AnchorStyles.Bottom Or AnchorStyles.Left
-        grpImages.Controls.Add(txtMimeType)
-        grpImages.Controls.Add(lblMimeType)
-        grpImages.Controls.Add(lblHeight)
-        grpImages.Controls.Add(nudHeight)
-        grpImages.Controls.Add(lblWidth)
-        grpImages.Controls.Add(nudWidth)
-        grpImages.Controls.Add(btnClearImg)
-        grpImages.Controls.Add(txtAltText)
-        grpImages.Controls.Add(btnSelectImg)
-        grpImages.Controls.Add(lstImages)
-        grpImages.Controls.Add(chkOptPng)
-        grpImages.Controls.Add(btnOpenOxiPngForm)
-        grpImages.Location = New Point(3, 12)
-        grpImages.Name = "grpImages"
-        grpImages.Size = New Size(251, 352)
-        grpImages.TabIndex = 0
-        grpImages.TabStop = False
-        grpImages.Text = "Images"
+        grpAttachments.Anchor = AnchorStyles.Top Or AnchorStyles.Bottom Or AnchorStyles.Left
+        grpAttachments.Controls.Add(txtMimeType)
+        grpAttachments.Controls.Add(lblMimeType)
+        grpAttachments.Controls.Add(lblHeight)
+        grpAttachments.Controls.Add(nudHeight)
+        grpAttachments.Controls.Add(lblWidth)
+        grpAttachments.Controls.Add(nudWidth)
+        grpAttachments.Controls.Add(btnClearAttch)
+        grpAttachments.Controls.Add(txtAltText)
+        grpAttachments.Controls.Add(btnSelectAttch)
+        grpAttachments.Controls.Add(lstAttachments)
+        grpAttachments.Controls.Add(chkOptPng)
+        grpAttachments.Controls.Add(btnOpenOxiPngForm)
+        grpAttachments.Location = New Point(3, 12)
+        grpAttachments.Name = "grpAttachments"
+        grpAttachments.Size = New Size(251, 352)
+        grpAttachments.TabIndex = 0
+        grpAttachments.TabStop = False
+        grpAttachments.Text = "Images"
         ' 
         ' txtMimeType
         ' 
@@ -300,14 +300,14 @@ Partial Class BdiuBskyPostBuilderForm
         nudWidth.Size = New Size(70, 23)
         nudWidth.TabIndex = 5
         ' 
-        ' btnClearImg
+        ' btnClearAttch
         ' 
-        btnClearImg.Location = New Point(6, 22)
-        btnClearImg.Name = "btnClearImg"
-        btnClearImg.Size = New Size(114, 23)
-        btnClearImg.TabIndex = 1
-        btnClearImg.Text = "Clear"
-        btnClearImg.UseVisualStyleBackColor = True
+        btnClearAttch.Location = New Point(6, 22)
+        btnClearAttch.Name = "btnClearAttch"
+        btnClearAttch.Size = New Size(114, 23)
+        btnClearAttch.TabIndex = 1
+        btnClearAttch.Text = "Clear"
+        btnClearAttch.UseVisualStyleBackColor = True
         ' 
         ' txtAltText
         ' 
@@ -319,15 +319,15 @@ Partial Class BdiuBskyPostBuilderForm
         txtAltText.Size = New Size(239, 142)
         txtAltText.TabIndex = 10
         ' 
-        ' btnSelectImg
+        ' btnSelectAttch
         ' 
-        btnSelectImg.Anchor = AnchorStyles.Top Or AnchorStyles.Right
-        btnSelectImg.Location = New Point(131, 22)
-        btnSelectImg.Name = "btnSelectImg"
-        btnSelectImg.Size = New Size(114, 23)
-        btnSelectImg.TabIndex = 2
-        btnSelectImg.Text = "Select"
-        btnSelectImg.UseVisualStyleBackColor = True
+        btnSelectAttch.Anchor = AnchorStyles.Top Or AnchorStyles.Right
+        btnSelectAttch.Location = New Point(131, 22)
+        btnSelectAttch.Name = "btnSelectAttch"
+        btnSelectAttch.Size = New Size(114, 23)
+        btnSelectAttch.TabIndex = 2
+        btnSelectAttch.Text = "Select"
+        btnSelectAttch.UseVisualStyleBackColor = True
         ' 
         ' chkOptPng
         ' 
@@ -529,7 +529,7 @@ Partial Class BdiuBskyPostBuilderForm
         Controls.Add(grpLanguages)
         Controls.Add(btnCancel)
         Controls.Add(grpReplyTo)
-        Controls.Add(grpImages)
+        Controls.Add(grpAttachments)
         Controls.Add(grpCaption)
         Controls.Add(grpLabels)
         Controls.Add(btnSubmit)
@@ -540,8 +540,8 @@ Partial Class BdiuBskyPostBuilderForm
         grpLabels.PerformLayout()
         grpCaption.ResumeLayout(False)
         grpCaption.PerformLayout()
-        grpImages.ResumeLayout(False)
-        grpImages.PerformLayout()
+        grpAttachments.ResumeLayout(False)
+        grpAttachments.PerformLayout()
         CType(nudHeight, ComponentModel.ISupportInitialize).EndInit()
         CType(nudWidth, ComponentModel.ISupportInitialize).EndInit()
         grpReplyTo.ResumeLayout(False)
@@ -553,7 +553,7 @@ Partial Class BdiuBskyPostBuilderForm
         gtpCreatedAt.PerformLayout()
         ResumeLayout(False)
     End Sub
-    Friend WithEvents lstImages As ListBox
+    Friend WithEvents lstAttachments As ListBox
     Friend WithEvents chkSexual As CheckBox
     Friend WithEvents chkNudity As CheckBox
     Friend WithEvents chkGraphic As CheckBox
@@ -563,10 +563,10 @@ Partial Class BdiuBskyPostBuilderForm
     Friend WithEvents grpCaption As GroupBox
     Private WithEvents lblGraphemeCount As Label
     Private WithEvents lblByteCount As Label
-    Friend WithEvents grpImages As GroupBox
-    Friend WithEvents btnSelectImg As Button
+    Friend WithEvents grpAttachments As GroupBox
+    Friend WithEvents btnSelectAttch As Button
     Friend WithEvents grpReplyTo As GroupBox
-    Friend WithEvents btnClearImg As Button
+    Friend WithEvents btnClearAttch As Button
     Friend WithEvents txtWarningLabels As TextBox
     Friend WithEvents grpLog As GroupBox
     Friend WithEvents ucLog As LogControl

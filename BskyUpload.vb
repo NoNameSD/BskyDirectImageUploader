@@ -36,11 +36,11 @@ Namespace Bdiu
             ' Upload all images
             Dim uploadedImagesList As List(Of idunno.Bluesky.Embed.EmbeddedImage) = Nothing
 
-            If Me.BskyPost.Images IsNot Nothing Then
+            If Me.BskyPost.Attachments IsNot Nothing Then
 
                 uploadedImagesList = New List(Of idunno.Bluesky.Embed.EmbeddedImage)
 
-                For Each image In Me.BskyPost.Images
+                For Each image In Me.BskyPost.Attachments
 
                     RaiseEvent ProcessDataReceived(Me, $"Uploading raw bytes for: {image.FileName}", False)
 
@@ -50,7 +50,7 @@ Namespace Bdiu
                         )
 
                     If Not uploadResult.Succeeded Then
-                        Throw New BlueskyImageUploadException($"Upload of ""{image.FileName}"" failed. {uploadResult.AtErrorDetail.Error}: {uploadResult.AtErrorDetail.Message}", uploadResult.StatusCode)
+                        Throw New BlueskyAttachmentUploadException($"Upload of ""{image.FileName}"" failed. {uploadResult.AtErrorDetail.Error}: {uploadResult.AtErrorDetail.Message}", uploadResult.StatusCode)
                     End If
 
                     ' Create embed image object (Besides the uploaded image, stores the AltText and Dimensions)
@@ -434,7 +434,7 @@ Namespace Bdiu
             End Sub
         End Class
 
-        Public Class BlueskyImageUploadException
+        Public Class BlueskyAttachmentUploadException
             Inherits BlueskyException
 
             Public Sub New(message As String)
@@ -480,15 +480,15 @@ Namespace Bdiu
         Public Property ReplyUrl As String
         Public Property ReplyIsQuote As Boolean = False
         Public Property Labels As HashSet(Of String)
-        Public Property Images As List(Of BskyUploadImageData)
+        Public Property Attachments As List(Of BskyUploadAttachmentData)
         Public Property Languages As HashSet(Of String)
         Public Property CreatedAt As Nullable(Of DateTimeOffset)
         Public Function GetMaxModifiedAttachmentDate() As Nullable(Of DateTimeOffset)
-            If Me.Images Is Nothing Then
+            If Me.Attachments Is Nothing Then
                 Return Nothing
             End If
             Dim maxModDate As Nullable(Of DateTimeOffset) = Nothing
-            For Each attach In Me.Images
+            For Each attach In Me.Attachments
                 If (maxModDate Is Nothing AndAlso attach.DateTimeModified.HasValue) _
              OrElse attach.DateTimeModified.Value.CompareTo(maxModDate.Value) > 0 Then
                     ' Current image has a larger modified date than the previous
@@ -498,11 +498,11 @@ Namespace Bdiu
             Return maxModDate
         End Function
         Public Function GetMaxCreatedAttachmentDate() As Nullable(Of DateTimeOffset)
-            If Me.Images Is Nothing Then
+            If Me.Attachments Is Nothing Then
                 Return Nothing
             End If
             Dim maxCrtDate As Nullable(Of DateTimeOffset) = Nothing
-            For Each attach In Me.Images
+            For Each attach In Me.Attachments
                 If (maxCrtDate Is Nothing AndAlso attach.DateTimeCreated.HasValue) _
              OrElse attach.DateTimeCreated.Value.CompareTo(maxCrtDate.Value) > 0 Then
                     ' Current image has a larger modified date than the previous
@@ -511,9 +511,9 @@ Namespace Bdiu
             Next
             Return maxCrtDate
         End Function
-        Public Sub AddImage(image As BskyUploadImageData)
-            If Me.Images Is Nothing Then Me.Images = New List(Of Bdiu.BskyUploadPostData.BskyUploadImageData)
-            Call Me.Images.Add(image)
+        Public Sub AddAttachment(image As BskyUploadAttachmentData)
+            If Me.Attachments Is Nothing Then Me.Attachments = New List(Of Bdiu.BskyUploadPostData.BskyUploadAttachmentData)
+            Call Me.Attachments.Add(image)
         End Sub
         Public Function AddLabel(label As String) As Boolean
             If Me.Labels Is Nothing Then Me.Labels = New HashSet(Of String)(StringComparer.OrdinalIgnoreCase)
@@ -548,7 +548,7 @@ Namespace Bdiu
             End If
             Call Me.Languages.UnionWith(bcp47Languages)
         End Sub
-        Public Class BskyUploadImageData
+        Public Class BskyUploadAttachmentData
             Public Property FilePath As String
             Public Property AltText As String
             Public Property Dimensions As ImageDimensions
@@ -565,7 +565,7 @@ Namespace Bdiu
                 Me.FilePath = filePath
             End Sub
 
-            Public Sub LoadImageData()
+            Public Sub LoadAttachmentData()
                 Dim info As New ImageMagick.MagickImageInfo(Me.FilePath)
 
                 If Me.Dimensions Is Nothing Then
