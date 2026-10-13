@@ -37,6 +37,14 @@ Partial Class BdiuBskyPostBuilderForm
         lblByteCount = New Label()
         cboLanguageAdd = New ComboBox()
         grpAttachments = New GroupBox()
+        grpAttachmentCaptions = New GroupBox()
+        txtCaptionLanguage = New TextBox()
+        cboCaptionLanguage = New ComboBox()
+        btnClearCaption = New Button()
+        txtCaptionPath = New TextBox()
+        btnSelectCaption = New Button()
+        chkAsGIF = New CheckBox()
+        chkIsAnimated = New CheckBox()
         txtMimeType = New TextBox()
         lblMimeType = New Label()
         lblHeight = New Label()
@@ -60,13 +68,14 @@ Partial Class BdiuBskyPostBuilderForm
         dtpCreatedAt = New DateTimePicker()
         gtpCreatedAt = New GroupBox()
         cmbSetDateFromAttachType = New ComboBox()
-        btnSetCreatedAtDuringPosting = New CheckBox()
+        chkSetCreatedAtDuringPosting = New CheckBox()
         txtCreatedAt = New TextBox()
         lblSetCreatedAtIso = New Label()
-        btnSetCreatedAtByAttachments = New CheckBox()
+        chkSetCreatedAtByAttachments = New CheckBox()
         grpLabels.SuspendLayout()
         grpCaption.SuspendLayout()
         grpAttachments.SuspendLayout()
+        grpAttachmentCaptions.SuspendLayout()
         CType(nudHeight, ComponentModel.ISupportInitialize).BeginInit()
         CType(nudWidth, ComponentModel.ISupportInitialize).BeginInit()
         grpReplyTo.SuspendLayout()
@@ -82,7 +91,7 @@ Partial Class BdiuBskyPostBuilderForm
         txtCaption.Multiline = True
         txtCaption.Name = "txtCaption"
         txtCaption.PlaceholderText = "Write your post caption (optional)"
-        txtCaption.Size = New Size(329, 63)
+        txtCaption.Size = New Size(329, 113)
         txtCaption.TabIndex = 14
         ' 
         ' txtReplyUrl
@@ -107,7 +116,7 @@ Partial Class BdiuBskyPostBuilderForm
         ' 
         lblGraphemeCount.Anchor = AnchorStyles.Bottom Or AnchorStyles.Left
         lblGraphemeCount.AutoSize = True
-        lblGraphemeCount.Location = New Point(3, 88)
+        lblGraphemeCount.Location = New Point(3, 138)
         lblGraphemeCount.Name = "lblGraphemeCount"
         lblGraphemeCount.Size = New Size(110, 15)
         lblGraphemeCount.TabIndex = 15
@@ -161,7 +170,7 @@ Partial Class BdiuBskyPostBuilderForm
         ' btnSubmit
         ' 
         btnSubmit.Anchor = AnchorStyles.Bottom Or AnchorStyles.Right
-        btnSubmit.Location = New Point(601, 346)
+        btnSubmit.Location = New Point(601, 396)
         btnSubmit.Name = "btnSubmit"
         btnSubmit.Size = New Size(126, 23)
         btnSubmit.TabIndex = 31
@@ -178,7 +187,7 @@ Partial Class BdiuBskyPostBuilderForm
         grpLabels.Controls.Add(chkPorn)
         grpLabels.Location = New Point(595, 56)
         grpLabels.Name = "grpLabels"
-        grpLabels.Size = New Size(138, 264)
+        grpLabels.Size = New Size(138, 314)
         grpLabels.TabIndex = 29
         grpLabels.TabStop = False
         grpLabels.Text = "Warning Labels"
@@ -189,7 +198,7 @@ Partial Class BdiuBskyPostBuilderForm
         txtWarningLabels.Location = New Point(6, 122)
         txtWarningLabels.Multiline = True
         txtWarningLabels.Name = "txtWarningLabels"
-        txtWarningLabels.Size = New Size(126, 136)
+        txtWarningLabels.Size = New Size(126, 186)
         txtWarningLabels.TabIndex = 22
         ' 
         ' grpCaption
@@ -200,7 +209,7 @@ Partial Class BdiuBskyPostBuilderForm
         grpCaption.Controls.Add(txtCaption)
         grpCaption.Location = New Point(254, 56)
         grpCaption.Name = "grpCaption"
-        grpCaption.Size = New Size(341, 106)
+        grpCaption.Size = New Size(341, 156)
         grpCaption.TabIndex = 13
         grpCaption.TabStop = False
         grpCaption.Text = "Post caption"
@@ -208,7 +217,7 @@ Partial Class BdiuBskyPostBuilderForm
         ' lblByteCount
         ' 
         lblByteCount.Anchor = AnchorStyles.Bottom Or AnchorStyles.Right
-        lblByteCount.Location = New Point(181, 88)
+        lblByteCount.Location = New Point(181, 138)
         lblByteCount.Name = "lblByteCount"
         lblByteCount.Size = New Size(157, 15)
         lblByteCount.TabIndex = 16
@@ -229,6 +238,9 @@ Partial Class BdiuBskyPostBuilderForm
         ' grpAttachments
         ' 
         grpAttachments.Anchor = AnchorStyles.Top Or AnchorStyles.Bottom Or AnchorStyles.Left
+        grpAttachments.Controls.Add(grpAttachmentCaptions)
+        grpAttachments.Controls.Add(chkAsGIF)
+        grpAttachments.Controls.Add(chkIsAnimated)
         grpAttachments.Controls.Add(txtMimeType)
         grpAttachments.Controls.Add(lblMimeType)
         grpAttachments.Controls.Add(lblHeight)
@@ -243,17 +255,99 @@ Partial Class BdiuBskyPostBuilderForm
         grpAttachments.Controls.Add(btnOpenOxiPngForm)
         grpAttachments.Location = New Point(3, 12)
         grpAttachments.Name = "grpAttachments"
-        grpAttachments.Size = New Size(251, 352)
+        grpAttachments.Size = New Size(251, 402)
         grpAttachments.TabIndex = 0
         grpAttachments.TabStop = False
-        grpAttachments.Text = "Images"
+        grpAttachments.Text = "Attachments"
+        ' 
+        ' grpAttachmentCaptions
+        ' 
+        grpAttachmentCaptions.Controls.Add(txtCaptionLanguage)
+        grpAttachmentCaptions.Controls.Add(cboCaptionLanguage)
+        grpAttachmentCaptions.Controls.Add(btnClearCaption)
+        grpAttachmentCaptions.Controls.Add(txtCaptionPath)
+        grpAttachmentCaptions.Controls.Add(btnSelectCaption)
+        grpAttachmentCaptions.Location = New Point(6, 190)
+        grpAttachmentCaptions.Name = "grpAttachmentCaptions"
+        grpAttachmentCaptions.Size = New Size(239, 75)
+        grpAttachmentCaptions.TabIndex = 12
+        grpAttachmentCaptions.TabStop = False
+        grpAttachmentCaptions.Text = "Captions"
+        ' 
+        ' txtCaptionLanguage
+        ' 
+        txtCaptionLanguage.Anchor = AnchorStyles.Top Or AnchorStyles.Bottom Or AnchorStyles.Left Or AnchorStyles.Right
+        txtCaptionLanguage.Location = New Point(172, 43)
+        txtCaptionLanguage.Name = "txtCaptionLanguage"
+        txtCaptionLanguage.Size = New Size(61, 23)
+        txtCaptionLanguage.TabIndex = 5
+        ' 
+        ' cboCaptionLanguage
+        ' 
+        cboCaptionLanguage.Anchor = AnchorStyles.Top Or AnchorStyles.Left Or AnchorStyles.Right
+        cboCaptionLanguage.AutoCompleteMode = AutoCompleteMode.SuggestAppend
+        cboCaptionLanguage.AutoCompleteSource = AutoCompleteSource.ListItems
+        cboCaptionLanguage.FormattingEnabled = True
+        cboCaptionLanguage.Location = New Point(6, 43)
+        cboCaptionLanguage.Name = "cboCaptionLanguage"
+        cboCaptionLanguage.Size = New Size(160, 23)
+        cboCaptionLanguage.TabIndex = 4
+        ' 
+        ' btnClearCaption
+        ' 
+        btnClearCaption.Location = New Point(6, 14)
+        btnClearCaption.Name = "btnClearCaption"
+        btnClearCaption.Size = New Size(50, 23)
+        btnClearCaption.TabIndex = 1
+        btnClearCaption.Text = "Clear"
+        btnClearCaption.UseVisualStyleBackColor = True
+        ' 
+        ' txtCaptionPath
+        ' 
+        txtCaptionPath.Anchor = AnchorStyles.Top Or AnchorStyles.Left Or AnchorStyles.Right
+        txtCaptionPath.Location = New Point(116, 14)
+        txtCaptionPath.Name = "txtCaptionPath"
+        txtCaptionPath.PlaceholderText = ".vtt caption file path"
+        txtCaptionPath.ReadOnly = True
+        txtCaptionPath.Size = New Size(117, 23)
+        txtCaptionPath.TabIndex = 3
+        ' 
+        ' btnSelectCaption
+        ' 
+        btnSelectCaption.Location = New Point(61, 14)
+        btnSelectCaption.Name = "btnSelectCaption"
+        btnSelectCaption.Size = New Size(50, 23)
+        btnSelectCaption.TabIndex = 2
+        btnSelectCaption.Text = "Select"
+        btnSelectCaption.UseVisualStyleBackColor = True
+        ' 
+        ' chkAsGIF
+        ' 
+        chkAsGIF.Anchor = AnchorStyles.Top Or AnchorStyles.Right
+        chkAsGIF.AutoSize = True
+        chkAsGIF.Location = New Point(131, 170)
+        chkAsGIF.Name = "chkAsGIF"
+        chkAsGIF.Size = New Size(109, 19)
+        chkAsGIF.TabIndex = 11
+        chkAsGIF.Text = "Present as ""GIF"""
+        chkAsGIF.UseVisualStyleBackColor = True
+        ' 
+        ' chkIsAnimated
+        ' 
+        chkIsAnimated.AutoSize = True
+        chkIsAnimated.Location = New Point(9, 170)
+        chkIsAnimated.Name = "chkIsAnimated"
+        chkIsAnimated.Size = New Size(78, 19)
+        chkIsAnimated.TabIndex = 10
+        chkIsAnimated.Text = "Animated"
+        chkIsAnimated.UseVisualStyleBackColor = True
         ' 
         ' txtMimeType
         ' 
         txtMimeType.Anchor = AnchorStyles.Top Or AnchorStyles.Left Or AnchorStyles.Right
         txtMimeType.Location = New Point(82, 141)
         txtMimeType.Name = "txtMimeType"
-        txtMimeType.PlaceholderText = "MIME-Type of current image"
+        txtMimeType.PlaceholderText = "MIME-Type of current file"
         txtMimeType.Size = New Size(163, 23)
         txtMimeType.TabIndex = 9
         ' 
@@ -312,12 +406,12 @@ Partial Class BdiuBskyPostBuilderForm
         ' txtAltText
         ' 
         txtAltText.Anchor = AnchorStyles.Top Or AnchorStyles.Bottom Or AnchorStyles.Left Or AnchorStyles.Right
-        txtAltText.Location = New Point(6, 166)
+        txtAltText.Location = New Point(6, 272)
         txtAltText.Multiline = True
         txtAltText.Name = "txtAltText"
-        txtAltText.PlaceholderText = "Alt text for current image"
-        txtAltText.Size = New Size(239, 142)
-        txtAltText.TabIndex = 10
+        txtAltText.PlaceholderText = "Alt text for current attachment"
+        txtAltText.Size = New Size(239, 86)
+        txtAltText.TabIndex = 13
         ' 
         ' btnSelectAttch
         ' 
@@ -333,20 +427,20 @@ Partial Class BdiuBskyPostBuilderForm
         ' 
         chkOptPng.Anchor = AnchorStyles.Bottom Or AnchorStyles.Left
         chkOptPng.AutoSize = True
-        chkOptPng.Location = New Point(6, 312)
+        chkOptPng.Location = New Point(6, 362)
         chkOptPng.Name = "chkOptPng"
         chkOptPng.Size = New Size(121, 34)
-        chkOptPng.TabIndex = 11
+        chkOptPng.TabIndex = 14
         chkOptPng.Text = "Optimize PNGs" & vbCrLf & "(Requires Oxipng)"
         chkOptPng.UseVisualStyleBackColor = True
         ' 
         ' btnOpenOxiPngForm
         ' 
         btnOpenOxiPngForm.Anchor = AnchorStyles.Bottom Or AnchorStyles.Right
-        btnOpenOxiPngForm.Location = New Point(133, 318)
+        btnOpenOxiPngForm.Location = New Point(133, 368)
         btnOpenOxiPngForm.Name = "btnOpenOxiPngForm"
         btnOpenOxiPngForm.Size = New Size(91, 23)
-        btnOpenOxiPngForm.TabIndex = 12
+        btnOpenOxiPngForm.TabIndex = 15
         btnOpenOxiPngForm.Text = "Setup Args"
         btnOpenOxiPngForm.UseVisualStyleBackColor = True
         ' 
@@ -377,7 +471,7 @@ Partial Class BdiuBskyPostBuilderForm
         ' 
         grpLog.Anchor = AnchorStyles.Bottom Or AnchorStyles.Left Or AnchorStyles.Right
         grpLog.Controls.Add(ucLog)
-        grpLog.Location = New Point(3, 364)
+        grpLog.Location = New Point(3, 414)
         grpLog.Name = "grpLog"
         grpLog.Size = New Size(740, 136)
         grpLog.TabIndex = 40
@@ -397,7 +491,7 @@ Partial Class BdiuBskyPostBuilderForm
         ' 
         btnCancel.Anchor = AnchorStyles.Bottom Or AnchorStyles.Right
         btnCancel.Enabled = False
-        btnCancel.Location = New Point(601, 322)
+        btnCancel.Location = New Point(601, 372)
         btnCancel.Name = "btnCancel"
         btnCancel.Size = New Size(126, 23)
         btnCancel.TabIndex = 30
@@ -410,7 +504,7 @@ Partial Class BdiuBskyPostBuilderForm
         grpLanguages.Controls.Add(txtLanguages)
         grpLanguages.Controls.Add(lblLanguageAdd)
         grpLanguages.Controls.Add(cboLanguageAdd)
-        grpLanguages.Location = New Point(254, 162)
+        grpLanguages.Location = New Point(254, 212)
         grpLanguages.Name = "grpLanguages"
         grpLanguages.Size = New Size(341, 77)
         grpLanguages.TabIndex = 17
@@ -456,13 +550,13 @@ Partial Class BdiuBskyPostBuilderForm
         ' 
         gtpCreatedAt.Anchor = AnchorStyles.Bottom Or AnchorStyles.Left Or AnchorStyles.Right
         gtpCreatedAt.Controls.Add(cmbSetDateFromAttachType)
-        gtpCreatedAt.Controls.Add(btnSetCreatedAtDuringPosting)
+        gtpCreatedAt.Controls.Add(chkSetCreatedAtDuringPosting)
         gtpCreatedAt.Controls.Add(txtCreatedAt)
         gtpCreatedAt.Controls.Add(lblSetCreatedAtIso)
         gtpCreatedAt.Controls.Add(lblSetCreatedAtPicker)
         gtpCreatedAt.Controls.Add(dtpCreatedAt)
-        gtpCreatedAt.Controls.Add(btnSetCreatedAtByAttachments)
-        gtpCreatedAt.Location = New Point(254, 239)
+        gtpCreatedAt.Controls.Add(chkSetCreatedAtByAttachments)
+        gtpCreatedAt.Location = New Point(254, 289)
         gtpCreatedAt.Name = "gtpCreatedAt"
         gtpCreatedAt.Size = New Size(341, 125)
         gtpCreatedAt.TabIndex = 21
@@ -482,15 +576,15 @@ Partial Class BdiuBskyPostBuilderForm
         cmbSetDateFromAttachType.Sorted = True
         cmbSetDateFromAttachType.TabIndex = 28
         ' 
-        ' btnSetCreatedAtDuringPosting
+        ' chkSetCreatedAtDuringPosting
         ' 
-        btnSetCreatedAtDuringPosting.AutoSize = True
-        btnSetCreatedAtDuringPosting.Location = New Point(6, 74)
-        btnSetCreatedAtDuringPosting.Name = "btnSetCreatedAtDuringPosting"
-        btnSetCreatedAtDuringPosting.Size = New Size(248, 19)
-        btnSetCreatedAtDuringPosting.TabIndex = 26
-        btnSetCreatedAtDuringPosting.Text = "Set the value based on the time of posting"
-        btnSetCreatedAtDuringPosting.UseVisualStyleBackColor = True
+        chkSetCreatedAtDuringPosting.AutoSize = True
+        chkSetCreatedAtDuringPosting.Location = New Point(6, 74)
+        chkSetCreatedAtDuringPosting.Name = "chkSetCreatedAtDuringPosting"
+        chkSetCreatedAtDuringPosting.Size = New Size(248, 19)
+        chkSetCreatedAtDuringPosting.TabIndex = 26
+        chkSetCreatedAtDuringPosting.Text = "Set the value based on the time of posting"
+        chkSetCreatedAtDuringPosting.UseVisualStyleBackColor = True
         ' 
         ' txtCreatedAt
         ' 
@@ -509,22 +603,22 @@ Partial Class BdiuBskyPostBuilderForm
         lblSetCreatedAtIso.TabIndex = 24
         lblSetCreatedAtIso.Text = "ISO 8601:"
         ' 
-        ' btnSetCreatedAtByAttachments
+        ' chkSetCreatedAtByAttachments
         ' 
-        btnSetCreatedAtByAttachments.AutoSize = True
-        btnSetCreatedAtByAttachments.Location = New Point(6, 95)
-        btnSetCreatedAtByAttachments.Name = "btnSetCreatedAtByAttachments"
-        btnSetCreatedAtByAttachments.Size = New Size(293, 19)
-        btnSetCreatedAtByAttachments.TabIndex = 27
-        btnSetCreatedAtByAttachments.Text = "Set value by highest attachment                         date"
-        btnSetCreatedAtByAttachments.UseVisualStyleBackColor = True
+        chkSetCreatedAtByAttachments.AutoSize = True
+        chkSetCreatedAtByAttachments.Location = New Point(6, 95)
+        chkSetCreatedAtByAttachments.Name = "chkSetCreatedAtByAttachments"
+        chkSetCreatedAtByAttachments.Size = New Size(293, 19)
+        chkSetCreatedAtByAttachments.TabIndex = 27
+        chkSetCreatedAtByAttachments.Text = "Set value by highest attachment                         date"
+        chkSetCreatedAtByAttachments.UseVisualStyleBackColor = True
         ' 
         ' BdiuBskyPostBuilderForm
         ' 
         AllowDrop = True
         AutoScaleDimensions = New SizeF(7F, 15F)
         AutoScaleMode = AutoScaleMode.Font
-        ClientSize = New Size(744, 500)
+        ClientSize = New Size(744, 550)
         Controls.Add(gtpCreatedAt)
         Controls.Add(grpLanguages)
         Controls.Add(btnCancel)
@@ -542,6 +636,8 @@ Partial Class BdiuBskyPostBuilderForm
         grpCaption.PerformLayout()
         grpAttachments.ResumeLayout(False)
         grpAttachments.PerformLayout()
+        grpAttachmentCaptions.ResumeLayout(False)
+        grpAttachmentCaptions.PerformLayout()
         CType(nudHeight, ComponentModel.ISupportInitialize).EndInit()
         CType(nudWidth, ComponentModel.ISupportInitialize).EndInit()
         grpReplyTo.ResumeLayout(False)
@@ -592,8 +688,15 @@ Partial Class BdiuBskyPostBuilderForm
     Friend WithEvents gtpCreatedAt As GroupBox
     Friend WithEvents lblSetCreatedAtIso As Label
     Friend WithEvents txtCreatedAt As TextBox
-    Friend WithEvents btnSetCreatedAtDuringPosting As CheckBox
-    Friend WithEvents btnSetCreatedAtByAttachments As CheckBox
+    Friend WithEvents chkSetCreatedAtDuringPosting As CheckBox
+    Friend WithEvents chkSetCreatedAtByAttachments As CheckBox
     Friend WithEvents cmbSetDateFromAttachType As ComboBox
-
+    Friend WithEvents chkIsAnimated As CheckBox
+    Friend WithEvents chkAsGIF As CheckBox
+    Friend WithEvents txtCaptionPath As TextBox
+    Friend WithEvents btnClearCaption As Button
+    Friend WithEvents btnSelectCaption As Button
+    Friend WithEvents grpAttachmentCaptions As GroupBox
+    Friend WithEvents cboCaptionLanguage As ComboBox
+    Friend WithEvents txtCaptionLanguage As TextBox
 End Class

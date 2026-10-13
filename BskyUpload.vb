@@ -33,37 +33,66 @@ Namespace Bdiu
                 End If
             End If
 
-            ' Upload all images
+            ' Upload all images and videos
             Dim uploadedImagesList As List(Of idunno.Bluesky.Embed.EmbeddedImage) = Nothing
+            Dim videoEmbed As idunno.Bluesky.Embed.EmbeddedVideo = Nothing
+            Dim videoCount As Integer = 0
 
             If Me.BskyPost.Attachments IsNot Nothing Then
-
-                uploadedImagesList = New List(Of idunno.Bluesky.Embed.EmbeddedImage)
-
-                For Each image In Me.BskyPost.Attachments
-
-                    RaiseEvent ProcessDataReceived(Me, $"Uploading raw bytes for: {image.FileName}", False)
-
-                    ' Upload image as blob
-                    Dim uploadResult = Await Me.BskyMgmt.ExecuteWithAutoSave(
-                        Function() agent.UploadBlob(image.FilePath, image.MimeType, cancellationToken:=ct)
-                        )
-
-                    If Not uploadResult.Succeeded Then
-                        Throw New BlueskyAttachmentUploadException($"Upload of ""{image.FileName}"" failed. {uploadResult.AtErrorDetail.Error}: {uploadResult.AtErrorDetail.Message}", uploadResult.StatusCode)
+                For Each attach In Me.BskyPost.Attachments
+                    If attach.IsAnimated Then
+                        videoCount += 1
                     End If
+                Next
+                If videoCount > 1 Then
+                    Throw New ArgumentException($"There are {videoCount} video / animation attachments. Only 1 is allowed.")
+                End If
+            End If
 
-                    ' Create embed image object (Besides the uploaded image, stores the AltText and Dimensions)
-                    Dim imageEmbed As idunno.Bluesky.Embed.EmbeddedImage
-                    Dim altText As String = If(image.AltText, String.Empty)
+            If Me.BskyPost.Attachments IsNot Nothing Then
+                For Each attach In Me.BskyPost.Attachments
 
-                    If image.Dimensions IsNot Nothing AndAlso image.Dimensions.Width.HasValue AndAlso image.Dimensions.Height.HasValue Then
-                        Dim ratio As New idunno.Bluesky.Embed.AspectRatio(CInt(image.Dimensions.Width.Value), CInt(image.Dimensions.Height.Value))
-                        imageEmbed = New idunno.Bluesky.Embed.EmbeddedImage(uploadResult.Result, altText, ratio)
+                    If attach.IsAnimated Then
+
+                        RaiseEvent ProcessDataReceived(Me, $"Uploading: {attach.FileName}", False)
+
+                        ' Upload video or animated image as EmbeddedVideo blob
+
+                        If attach.MimeType.First.Equals("v"c) OrElse attach.MimeType.First.Equals("V"c) Then
+                            ' File is actual video. Do the upload in chunks.
+                            videoEmbed = Await Me.UploadChunkedVideoAsync(attach, ct)
+                        Else
+                            ' File is animated image. Upload must be done all at once.
+                            videoEmbed = Await Me.UploadVideoAsync(attach, ct)
+                        End If
                     Else
-                        imageEmbed = New idunno.Bluesky.Embed.EmbeddedImage(uploadResult.Result, altText)
+                        If uploadedImagesList Is Nothing Then
+                            uploadedImagesList = New List(Of idunno.Bluesky.Embed.EmbeddedImage)
+                        End If
+
+                        RaiseEvent ProcessDataReceived(Me, $"Uploading raw bytes for: {attach.FileName}", False)
+
+                        ' Upload static image as EmbeddedImage blob
+                        Dim uploadResult = Await Me.BskyMgmt.ExecuteWithAutoSave(
+                            Function() agent.UploadBlob(attach.FilePath, attach.MimeType, cancellationToken:=ct)
+                            )
+
+                        If Not uploadResult.Succeeded Then
+                            Throw New BlueskyAttachmentUploadException($"Upload of ""{attach.FileName}"" failed. {uploadResult.AtErrorDetail.Error}: {uploadResult.AtErrorDetail.Message}", uploadResult.StatusCode)
+                        End If
+
+                        ' Create embed image object (Besides the uploaded image, stores the AltText and Dimensions)
+                        Dim imageEmbed As idunno.Bluesky.Embed.EmbeddedImage
+                        Dim altText As String = If(attach.AltText, String.Empty)
+
+                        If attach.Dimensions IsNot Nothing AndAlso attach.Dimensions.Width.HasValue AndAlso attach.Dimensions.Height.HasValue Then
+                            Dim ratio As New idunno.Bluesky.Embed.AspectRatio(CInt(attach.Dimensions.Width.Value), CInt(attach.Dimensions.Height.Value))
+                            imageEmbed = New idunno.Bluesky.Embed.EmbeddedImage(uploadResult.Result, altText, ratio)
+                        Else
+                            imageEmbed = New idunno.Bluesky.Embed.EmbeddedImage(uploadResult.Result, altText)
+                        End If
+                        Call uploadedImagesList.Add(imageEmbed)
                     End If
-                    Call uploadedImagesList.Add(imageEmbed)
                 Next
             End If
 
@@ -111,6 +140,11 @@ Namespace Bdiu
             ' Add the embedded images to the post builder
             If uploadedImagesList IsNot Nothing AndAlso uploadedImagesList.Count > 0 Then
                 Call buildPost.EmbedRecord(imageGalleryEmbeds)
+            End If
+
+            ' Add the embedded video to the post builder
+            If videoEmbed IsNot Nothing Then
+                Call buildPost.Add(videoEmbed)
             End If
 
             ' Set the actual post text
@@ -398,6 +432,194 @@ Namespace Bdiu
             Return Nothing
         End Function
 
+        Async Function UploadCaptions(attach As BskyDirectImageUploader.Bdiu.BskyUploadPostData.BskyUploadAttachmentData, ct As System.Threading.CancellationToken) As Task(Of idunno.Bluesky.Embed.Caption)
+            Dim captionsAsBytes() As Byte = System.IO.File.ReadAllBytes(attach.CaptionFilePath)
+
+            Dim agent = Me.BskyMgmt.BskyAgent
+
+            Dim captionResult = Await agent.UploadCaptions(captionsAsBytes:=captionsAsBytes, captionLanguage:=attach.CaptionLanguage, cancellationToken:=ct)
+
+            If Not captionResult.Succeeded Then
+                Throw New BlueskyAttachmentUploadException($"Caption upload for ""{attach.FileName}"" failed. {captionResult.AtErrorDetail.Error}: {captionResult.AtErrorDetail.Message}", captionResult.StatusCode)
+            End If
+
+            Return captionResult.Result
+        End Function
+
+        ''' <summary>
+        ''' Package the finalized video Blob
+        ''' </summary>
+        Public Shared Function PackageVideoBlob(
+               attach As BskyDirectImageUploader.Bdiu.BskyUploadPostData.BskyUploadAttachmentData,
+               videoBlob As idunno.AtProto.Blob,
+               captions As ICollection(Of idunno.Bluesky.Embed.Caption)
+            ) As idunno.Bluesky.Embed.EmbeddedVideo
+
+            Dim aspectRatio As idunno.Bluesky.Embed.AspectRatio = Nothing
+            If attach.Dimensions IsNot Nothing AndAlso attach.Dimensions.Width.HasValue AndAlso attach.Dimensions.Height.HasValue Then
+                aspectRatio = New idunno.Bluesky.Embed.AspectRatio(width:=CInt(attach.Dimensions.Width.Value), height:=CInt(attach.Dimensions.Height.Value))
+            End If
+
+            Dim videoEmbed As idunno.Bluesky.Embed.EmbeddedVideo
+
+            If attach.PresentAsGif Then
+                videoEmbed = New idunno.Bluesky.Embed.EmbeddedVideo(
+                    video:=videoBlob, altText:=attach.AltText, aspectRatio:=aspectRatio, captions:=captions, presentation:=idunno.Bluesky.Embed.VideoPresentationKnownValues.Gif)
+            Else
+                videoEmbed = New idunno.Bluesky.Embed.EmbeddedVideo(
+                    video:=videoBlob, altText:=attach.AltText, aspectRatio:=aspectRatio, captions:=captions)
+            End If
+
+            Return videoEmbed
+        End Function
+
+        ''' <summary>
+        ''' Uploads a video attachment all at once
+        ''' Will also work for animated images e.g. GIF
+        ''' </summary>
+        Async Function UploadVideoAsync(attach As BskyDirectImageUploader.Bdiu.BskyUploadPostData.BskyUploadAttachmentData, ct As System.Threading.CancellationToken) As Task(Of idunno.Bluesky.Embed.EmbeddedVideo)
+            Dim captions As List(Of idunno.Bluesky.Embed.Caption)
+
+            If String.IsNullOrWhiteSpace(attach.CaptionFilePath) Then
+                ' No captions provided
+                captions = Nothing
+            Else
+                captions = New List(Of idunno.Bluesky.Embed.Caption) From {
+                    Await Me.UploadCaptions(attach, ct)
+                }
+            End If
+
+            Dim agent = Me.BskyMgmt.BskyAgent
+
+            Dim media As Byte() = System.IO.File.ReadAllBytes(attach.FilePath)
+
+            ' Upload the whole video / animated image at once
+            Dim uploadResult = Await agent.UploadVideo(
+                  fileName:=attach.FileName,
+                     media:=media,
+                  mimeType:=attach.MimeType,
+         cancellationToken:=ct)
+
+            If Not uploadResult.Succeeded Then
+                Throw New BlueskyAttachmentUploadException($"Failed single upload for file ""{attach.FileName}"". {uploadResult.AtErrorDetail.Error}: {uploadResult.AtErrorDetail.Message}", uploadResult.StatusCode)
+            End If
+
+            Return PackageVideoBlob(attach:=attach, videoBlob:=uploadResult.Result.Blob, captions:=captions)
+        End Function
+
+        ''' <summary>
+        ''' Uploads a video attachment in chunks
+        ''' Will not work for animated images e.g. GIF
+        ''' </summary>
+        Async Function UploadChunkedVideoAsync(attach As BskyDirectImageUploader.Bdiu.BskyUploadPostData.BskyUploadAttachmentData, ct As System.Threading.CancellationToken) As Task(Of idunno.Bluesky.Embed.EmbeddedVideo)
+            Dim captions As List(Of idunno.Bluesky.Embed.Caption)
+
+            If String.IsNullOrWhiteSpace(attach.CaptionFilePath) Then
+                ' No captions provided
+                captions = Nothing
+            Else
+                captions = New List(Of idunno.Bluesky.Embed.Caption) From {
+                    Await Me.UploadCaptions(attach, ct)
+                }
+            End If
+
+            Dim uploadMimeType As String = Nothing
+            uploadMimeType = attach.MimeType
+
+            Dim videoWidth As Nullable(Of Int32)
+            Dim videoHeight As Nullable(Of Int32)
+            If attach.Dimensions IsNot Nothing Then
+                videoWidth = CType(attach.Dimensions.Width, Nullable(Of Int32))
+                videoHeight = CType(attach.Dimensions.Height, Nullable(Of Int32))
+            End If
+
+            ' Get the exact size of the complete file before splitting it into parts
+            Dim fileInfo As New System.IO.FileInfo(attach.FilePath)
+
+            Dim agent = Me.BskyMgmt.BskyAgent
+
+            Dim startResult = Await agent.StartUpload(size:=fileInfo.Length, mimeType:=uploadMimeType, width:=videoWidth, height:=videoHeight, cancellationToken:=ct)
+
+            If Not startResult.Succeeded Then
+                Throw New BlueskyAttachmentUploadException($"Starting upload of ""{attach.FileName}"" failed. {startResult.AtErrorDetail.Error}: {startResult.AtErrorDetail.Message}", startResult.StatusCode)
+            End If
+
+            ' The upload identifier used for subsequent parts
+            Dim sessionJobId As String = startResult.Result.JobId
+
+            ' Stream and upload sequential parts using the JobId
+            Dim maxChunkSize As Integer = 5 * 1024 * 1024 ' 5 MB chunks
+            Dim buffer(maxChunkSize - 1) As Byte
+            Dim partIndex As Integer = 1 ' Start index is required to be 1 by idunno.BlueSky
+
+            Try
+                Using fileStream As System.IO.FileStream = System.IO.File.OpenRead(attach.FilePath)
+                    Dim bytesRead As Integer = fileStream.Read(buffer, 0, buffer.Length)
+
+                    While bytesRead > 0
+                        Dim chunkBytes(bytesRead - 1) As Byte
+                        Call System.Buffer.BlockCopy(buffer, 0, chunkBytes, 0, bytesRead)
+
+                        RaiseEvent ProcessDataReceived(Me, $"Uploading part {partIndex} ({bytesRead} bytes)...", False)
+
+                        ' Pass the sessionJobId to authenticate this chunk sequence
+                        Dim partResult = Await agent.UploadPart(
+                                 jobId:=sessionJobId,
+                                  part:=partIndex,
+                                 bytes:=chunkBytes,
+                     cancellationToken:=ct)
+
+                        If Not partResult.Succeeded Then
+                            Throw New BlueskyAttachmentUploadException($"Failed at part {partIndex} for file ""{attach.FileName}"". {partResult.AtErrorDetail.Error}: {partResult.AtErrorDetail.Message}", partResult.StatusCode)
+                            Await agent.AbortUpload(sessionJobId, ct)
+                        End If
+
+                        partIndex += 1
+                        bytesRead = fileStream.Read(buffer, 0, buffer.Length)
+                    End While
+                End Using
+
+                ' Finalize the chunk layout
+                Dim finishResult = Await agent.FinishUpload(
+                           jobId:=sessionJobId,
+               cancellationToken:=ct)
+
+                If Not finishResult.Succeeded Then
+                    Throw New BlueskyAttachmentUploadException($"Failed to complete multipart session for file ""{attach.FileName}"". {finishResult.AtErrorDetail.Error}: {finishResult.AtErrorDetail.Message}", finishResult.StatusCode)
+                End If
+
+                ' Poll for Transcode Status
+                ' The processing lifecycle continues on the same JobId tracking identity
+                Dim videoBlob As idunno.AtProto.Blob = Nothing
+                Dim isProcessing As Boolean = True
+
+                RaiseEvent ProcessDataReceived(Me, "Waiting for server-side transcoding processing...", False)
+                While isProcessing
+                    Await Task.Delay(5000, ct)
+
+                    Dim statusResult = Await agent.GetJobStatus(sessionJobId, ct)
+
+                    If statusResult.Succeeded Then
+                        Dim state = statusResult.Result.State
+                        If state = idunno.Bluesky.Video.JobState.Completed Then
+                            videoBlob = statusResult.Result.Blob
+                            isProcessing = False
+                        ElseIf state = idunno.Bluesky.Video.JobState.Failed Then
+                            Throw New BlueskyAttachmentUploadException($"Transcode processing failed on Bluesky infrastructure for file ""{attach.FileName}"". {statusResult.AtErrorDetail.Error}: {statusResult.AtErrorDetail.Message}", statusResult.StatusCode)
+                        End If
+                    Else
+                        Throw New BlueskyAttachmentUploadException($"Error contacting status monitoring service for file ""{attach.FileName}"". {statusResult.AtErrorDetail.Error}: {statusResult.AtErrorDetail.Message}", statusResult.StatusCode)
+                    End If
+                End While
+
+                Return PackageVideoBlob(attach:=attach, videoBlob:=videoBlob, captions:=captions)
+            Catch ex As Exception
+                ' Safely await an offloaded asynchronous task without violating compiler constraints
+                Call Task.Run(Async Function() Await agent.AbortUpload(sessionJobId, System.Threading.CancellationToken.None)).Wait(System.Threading.CancellationToken.None)
+                Throw
+            End Try
+        End Function
+
         Public Class BlueskyException
             Inherits Exception
 
@@ -553,6 +775,19 @@ Namespace Bdiu
             Public Property AltText As String
             Public Property Dimensions As ImageDimensions
             Public Property MimeType As String
+            ''' <summary>
+            ''' Is animated image or video
+            ''' </summary>
+            Public Property IsAnimated As Boolean
+            ''' <summary>
+            ''' The final <see cref="idunno.Bluesky.Embed.EmbeddedVideo"/> will be shown as "GIF"
+            ''' </summary>
+            Public Property PresentAsGif As Boolean
+            ''' <summary>
+            ''' Path of a Bluesky supported .vtt caption file (is ignored for static image posts)
+            ''' </summary>
+            Public Property CaptionFilePath As String
+            Public Property CaptionLanguage As String
             Public Property DateTimeModified As Nullable(Of DateTimeOffset)
             Public Property DateTimeCreated As Nullable(Of DateTimeOffset)
 
@@ -584,7 +819,98 @@ Namespace Bdiu
 
                 Me.DateTimeModified = New DateTimeOffset(fileInfo.LastWriteTimeUtc)
                 Me.DateTimeCreated = New DateTimeOffset(fileInfo.CreationTime)
+
+                ' Map MimeTypes for videos
+                ' Magick.Net returns an empty string when reading the MimeType for videos
+                Select Case formatInfo.Format
+                    Case ImageMagick.MagickFormat.Mp4
+                        Me.MimeType = "video/mp4"
+                        Me.IsAnimated = True
+                    Case ImageMagick.MagickFormat.M4v
+                        Me.MimeType = "video/x-m4v"
+                        Me.IsAnimated = True
+                    Case ImageMagick.MagickFormat.WebM
+                        Me.MimeType = "video/webm"
+                        Me.IsAnimated = True
+                    Case ImageMagick.MagickFormat.Avi
+                        Me.MimeType = "video/x-msvideo"
+                        Me.IsAnimated = True
+                    Case ImageMagick.MagickFormat.Mov
+                        Me.MimeType = "video/quicktime"
+                        Me.IsAnimated = True
+                    Case ImageMagick.MagickFormat.Mpg, ImageMagick.MagickFormat.Mpeg
+                        Me.MimeType = "video/mpeg"
+                        Me.IsAnimated = True
+                    Case Else
+                        ' Check if the image is animated
+                        Try
+                            Select Case formatInfo.Format
+                                Case ImageMagick.MagickFormat.Png
+
+                                    ' Check for APNG animation control chunk
+                                    Me.IsAnimated = IsPngAnimated(fileInfo.FullName)
+
+                                Case Else
+                                    Dim frames As IEnumerable(Of ImageMagick.IMagickImageInfo) = ImageMagick.MagickImageInfo.ReadCollection(fileInfo)
+
+                                    ' Counts as animated if there is more than one frame
+                                    If frames.Count() > 1 Then
+                                        Me.IsAnimated = True
+                                    End If
+                            End Select
+
+                            If Me.IsAnimated Then
+                                Me.PresentAsGif = True
+                            End If
+
+                        Catch ex As Exception
+                            ' Ignore errors
+                        End Try
+                End Select
             End Sub
+
+            ''' <summary>
+            ''' Fast evaluation to determine if a PNG is animated by checking its headers.
+            ''' Counts as animated if an acTL chunk is found.
+            ''' </summary>
+            Public Shared Function IsPngAnimated(filePath As String) As Boolean
+                Try
+                    Using stream As New System.IO.FileStream(filePath, System.IO.FileMode.Open, System.IO.FileAccess.Read, System.IO.FileShare.Read)
+                        ' Target binary indicators converted to integers for fast matching
+                        Dim acTlMarker As Integer = &H6163544C ' "acTL" in Hex
+                        Dim idatMarker As Integer = &H49444154 ' "IDAT" in Hex
+
+                        ' Sliding 4-byte window buffer
+                        Dim rollingBuffer As Long = 0
+                        Dim currentByte As Integer = 0
+
+                        ' Read byte by byte. The acTL chunk always resides near the file header.
+                        While True
+                            currentByte = stream.ReadByte()
+                            If currentByte = -1 Then Exit While ' End of file reached
+
+                            ' Shift old bytes left and append the newest byte
+                            rollingBuffer = ((rollingBuffer And &HFFFFFF) << 8) Or CByte(currentByte)
+
+                            ' Check if the window matches the Animation Control chunk
+                            If rollingBuffer = acTlMarker Then
+                                Return True ' Confirmed APNG
+                            End If
+
+                            ' Optimization: If "IDAT" is hit, we passed the valid header window 
+                            ' where acTL is allowed to reside. Abort immediately.
+                            If rollingBuffer = idatMarker Then
+                                Return False ' Standard Static PNG
+                            End If
+                        End While
+                    End Using
+
+                Catch ex As Exception
+                    ' Handle or log stream errors safely here
+                End Try
+
+                Return False
+            End Function
 
             Public Class ImageDimensions
                 Public Property Width As Nullable(Of System.UInt32)

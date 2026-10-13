@@ -3,6 +3,7 @@
 Public Class BdiuBskyPostBuilderForm
 
     Const BskyMaxImageSize As Long = 2000000
+    Const BskyMaxVideoSize As Long = 300000000
 
     Private postData As New Bdiu.BskyUploadPostData
 
@@ -11,6 +12,8 @@ Public Class BdiuBskyPostBuilderForm
     ' Bluesky's strict limits
     Private ReadOnly MaxGraphemes As Integer = idunno.Bluesky.Maximum.PostLengthInGraphemes
     Private ReadOnly MaxBytes As Integer = idunno.Bluesky.Maximum.PostLengthInBytes
+
+    Private ReadOnly LanguageList As List(Of Bdiu.LanguageItem) = Bdiu.LanguageItem.GetLanguageList
 
     <System.ComponentModel.DesignerSerializationVisibility(System.ComponentModel.DesignerSerializationVisibility.Hidden)>
     Public Property BskyMgmt As BskyDirectImageUploader.Bdiu.BskySessionManager
@@ -33,14 +36,19 @@ Public Class BdiuBskyPostBuilderForm
 
         Call Me.UpdateCharCount()
         Call Me.SetAttachmentDataOnForm()
-        RemoveHandler cboLanguageAdd.SelectedIndexChanged, AddressOf cboLanguageAdd_SelectedIndexChanged
-        Call Me.SetLanguageBoxData()
-        Call Me.RefreshLanguageTextBox()
-        AddHandler cboLanguageAdd.SelectedIndexChanged, AddressOf cboLanguageAdd_SelectedIndexChanged
+        RemoveHandler cboLanguageAdd.SelectedIndexChanged, AddressOf cboLanguage_SelectedIndexChanged
+        Call Me.SetLanguageBoxData(Me.cboLanguageAdd)
+        Call Me.RefreshPostLanguage()
+        AddHandler cboLanguageAdd.SelectedIndexChanged, AddressOf cboLanguage_SelectedIndexChanged
+        RemoveHandler cboCaptionLanguage.SelectedIndexChanged, AddressOf cboLanguage_SelectedIndexChanged
+        RemoveHandler txtCaptionLanguage.Validated, AddressOf txtCaptionLanguage_Validated
+        Call Me.SetLanguageBoxData(Me.cboCaptionLanguage)
+        Call Me.RefreshAttachmentCaptionLanguage()
 
         Me.cmbSetDateFromAttachType.Text = "Modified"
-        Me.btnSetCreatedAtDuringPosting.Checked = True
-        Call RefreshCreatedAtBox()
+        Me.chkSetCreatedAtDuringPosting.Checked = True
+        Call Me.RefreshCreatedAtBox()
+        Call Me.RefreshedAnimatedFlag()
 
         If Me.BskyMgmt Is Nothing Then
             Me.BskyMgmt = New BskyDirectImageUploader.Bdiu.BskySessionManager
@@ -53,14 +61,14 @@ Public Class BdiuBskyPostBuilderForm
     ''' <summary>
     ''' Bind list of all cultures (with LanguageId) installed on the machine to the Language combo box
     ''' </summary>
-    Private Sub SetLanguageBoxData()
-        Me.cboLanguageAdd.DataSource = Bdiu.LanguageItem.GetLanguageList
-        Me.cboLanguageAdd.DisplayMember = "DisplayName" ' What the user sees
-        Me.cboLanguageAdd.ValueMember = "Bcp47Tag"      ' The actual BCP-47 code stored behind it
-        Call Me.SetSystemLanguageAsDefault()
+    Private Sub SetLanguageBoxData(cboLang As ComboBox)
+        cboLang.DataSource = New List(Of Bdiu.LanguageItem)(Me.LanguageList)
+        cboLang.DisplayMember = "DisplayName" ' What the user sees
+        cboLang.ValueMember = "Bcp47Tag"      ' The actual BCP-47 code stored behind it
+        Call Me.SetSystemLanguageAsDefault(cboLang)
     End Sub
 
-    Private Sub SetSystemLanguageAsDefault()
+    Private Sub SetSystemLanguageAsDefault(cboLang As ComboBox)
         ' PRESELECT THE SYSTEM LANGUAGE 
         ' Get the current Windows UI BCP-47 language tag (e.g., "en-US")
         Dim systemLanguage As String = System.Globalization.CultureInfo.CurrentUICulture.Name
@@ -68,29 +76,29 @@ Public Class BdiuBskyPostBuilderForm
         Me.postData.AddLanguage(systemLanguage)
 
         ' Assign it to SelectedValue. If it exists in your whitelist, it auto-selects.
-        Me.cboLanguageAdd.SelectedValue = systemLanguage
+        cboLang.SelectedValue = systemLanguage
 
         Dim languageList = DirectCast(Me.cboLanguageAdd.DataSource, List(Of BskyDirectImageUploader.Bdiu.LanguageItem))
 
         ' Fallback: If the exact system language isn't in the list (Shouldnt happen, as all installed languages are in the list)
-        If cboLanguageAdd.SelectedValue Is Nothing AndAlso systemLanguage.Contains("-"c) Then
+        If cboLang.SelectedValue Is Nothing AndAlso systemLanguage.Contains("-"c) Then
             Dim baseLanguage As String = systemLanguage.Split("-"c)(0) ' Extracts "en" from "en-CA"
 
             ' Look for an item in your list that starts with that base language
             Dim fallbackItem = languageList.FirstOrDefault(Function(x) x.Bcp47Tag.StartsWith(baseLanguage, StringComparison.OrdinalIgnoreCase))
 
             If fallbackItem IsNot Nothing Then
-                Me.cboLanguageAdd.SelectedValue = fallbackItem.Bcp47Tag
+                cboLang.SelectedValue = fallbackItem.Bcp47Tag
             End If
         End If
 
         ' Fallback to english if even that is not found
-        If cboLanguageAdd.SelectedValue Is Nothing Then
+        If cboLang.SelectedValue Is Nothing Then
 
             Dim fallbackItem = languageList.FirstOrDefault(Function(x) x.Bcp47Tag.StartsWith("en", StringComparison.OrdinalIgnoreCase))
 
             If fallbackItem IsNot Nothing Then
-                Me.cboLanguageAdd.SelectedValue = fallbackItem.Bcp47Tag
+                cboLang.SelectedValue = fallbackItem.Bcp47Tag
             End If
         End If
     End Sub
@@ -135,6 +143,7 @@ Public Class BdiuBskyPostBuilderForm
         Call Me.ClearAttachmentDimensionsNud()
         Me.nudWidth.Enabled = False
         Me.nudHeight.Enabled = False
+        Call Me.RefreshedAnimatedFlag()
     End Sub
 
     Private Sub AddAttachmentsSecurely(paths() As String)
@@ -142,36 +151,6 @@ Public Class BdiuBskyPostBuilderForm
 
             Dim ext As String = IO.Path.GetExtension(path).ToLower()
             Dim fileName As String = IO.Path.GetFileName(path)
-
-            ' Strict 2MB Server limit verification
-            Dim fileInfo As New System.IO.FileInfo(path)
-            If fileInfo.Length > BskyMaxImageSize Then
-                Dim messageText As String = $"The file '{fileInfo.Name}' is too large!{Environment.NewLine}({Math.Round(fileInfo.Length / 1000 / 1000, 2)} MB / {Math.Round(fileInfo.Length / 1024 / 1024, 2)} MiB){Environment.NewLine}{Environment.NewLine}Bluesky limits uncompressed blobs to {Math.Round(BskyMaxImageSize / 1000 / 1000, 2)} MB / {Math.Round(BskyMaxImageSize / 1024 / 1024, 2)} MiB.{Environment.NewLine}{Environment.NewLine}Add the image regardless?"
-
-                If {".png", ".apng"}.Contains(ext) Then
-                    messageText += $"{Environment.NewLine}{Environment.NewLine}Enabling PNG image optimization may bring the filesize under the threshold."
-                End If
-
-                If MessageBox.Show(messageText,
-                                   "Size Limit Reached",
-                                   MessageBoxButtons.YesNo,
-                                   MessageBoxIcon.Exclamation) <> DialogResult.Yes Then
-                    Return
-                End If
-            End If
-
-            If Me.postData.Attachments IsNot Nothing Then
-                If Me.postData.Attachments.Count = 10 Then
-                    If MessageBox.Show($"10 images already added.{Environment.NewLine}Bluesky technically allows up to 20 images per post, but will only display the first 10 on the site.{Environment.NewLine}{Environment.NewLine}Add more regardless?", "Soft Limit Reached", MessageBoxButtons.YesNo, MessageBoxIcon.Warning) <> DialogResult.Yes Then
-                        Return
-                    End If
-                End If
-                If Me.postData.Attachments.Count = 20 Then
-                    If MessageBox.Show($"20 images already added.{Environment.NewLine}Bluesky will reject this post, if you add more images.{Environment.NewLine}{Environment.NewLine}Add more regardless?", "Hard Limit Reached", MessageBoxButtons.YesNo, MessageBoxIcon.Warning) <> DialogResult.Yes Then
-                        Return
-                    End If
-                End If
-            End If
 
             ' Add to new attachment data object
             Dim attchData As New Bdiu.BskyUploadPostData.BskyUploadAttachmentData(filePath:=path)
@@ -182,6 +161,67 @@ Public Class BdiuBskyPostBuilderForm
             Catch ex As Exception
                 ' Ignore exceptions when reading the metadata
             End Try
+
+            If attchData.IsAnimated Then
+                ' Animated image or video
+                ' 300MB Server limit verification
+                Dim fileInfo As New System.IO.FileInfo(path)
+                If fileInfo.Length > BskyMaxVideoSize Then
+                    Dim messageText As String = $"The file '{fileInfo.Name}' is too large!{Environment.NewLine}({Math.Round(fileInfo.Length / 1000 / 1000, 2)} MB / {Math.Round(fileInfo.Length / 1024 / 1024, 2)} MiB){Environment.NewLine}{Environment.NewLine}Bluesky limits video blobs to {Math.Round(BskyMaxVideoSize / 1000 / 1000, 2)} MB / {Math.Round(BskyMaxVideoSize / 1024 / 1024, 2)} MiB.{Environment.NewLine}{Environment.NewLine}Add the file regardless?"
+
+                    If MessageBox.Show(messageText,
+                                       "Size Limit Reached",
+                                       MessageBoxButtons.YesNo,
+                                       MessageBoxIcon.Exclamation) <> DialogResult.Yes Then
+                        Return
+                    End If
+                End If
+
+                If Me.postData.Attachments IsNot Nothing Then
+                    If Me.postData.Attachments.Count = 1 Then
+                        If MessageBox.Show($"1 Attachment already added.{Environment.NewLine}Bluesky will reject this post, if you add more videos / animated images.{Environment.NewLine}{Environment.NewLine}Add more regardless?", "Hard Limit Reached", MessageBoxButtons.YesNo, MessageBoxIcon.Warning) <> DialogResult.Yes Then
+                            Return
+                        End If
+                    End If
+                End If
+            Else
+                ' Static image
+                ' 2MB Server limit verification
+                Dim fileInfo As New System.IO.FileInfo(path)
+                If fileInfo.Length > BskyMaxImageSize Then
+                    Dim messageText As String = $"The file '{fileInfo.Name}' is too large!{Environment.NewLine}({Math.Round(fileInfo.Length / 1000 / 1000, 2)} MB / {Math.Round(fileInfo.Length / 1024 / 1024, 2)} MiB){Environment.NewLine}{Environment.NewLine}Bluesky limits uncompressed blobs to {Math.Round(BskyMaxImageSize / 1000 / 1000, 2)} MB / {Math.Round(BskyMaxImageSize / 1024 / 1024, 2)} MiB.{Environment.NewLine}{Environment.NewLine}Add the image regardless?"
+
+                    If {".png", ".apng"}.Contains(ext) Then
+                        messageText += $"{Environment.NewLine}{Environment.NewLine}Enabling PNG image optimization may bring the filesize under the threshold."
+                    End If
+
+                    If MessageBox.Show(messageText,
+                                       "Size Limit Reached",
+                                       MessageBoxButtons.YesNo,
+                                       MessageBoxIcon.Exclamation) <> DialogResult.Yes Then
+                        Return
+                    End If
+                End If
+
+                If Me.postData.Attachments IsNot Nothing Then
+                    If Me.postData.Attachments.Count = 10 Then
+                        If MessageBox.Show($"10 Attachments already added.{Environment.NewLine}Bluesky technically allows up to 20 images per post, but will only display the first 10 on the site.{Environment.NewLine}{Environment.NewLine}Add more regardless?", "Soft Limit Reached", MessageBoxButtons.YesNo, MessageBoxIcon.Warning) <> DialogResult.Yes Then
+                            Return
+                        End If
+                    End If
+                    If Me.postData.Attachments.Count = 20 Then
+                        If MessageBox.Show($"20 Attachments already added.{Environment.NewLine}Bluesky will reject this post, if you add more images.{Environment.NewLine}{Environment.NewLine}Add more regardless?", "Hard Limit Reached", MessageBoxButtons.YesNo, MessageBoxIcon.Warning) <> DialogResult.Yes Then
+                            Return
+                        End If
+                    End If
+                End If
+            End If
+
+            If Me.postData.Languages IsNot Nothing AndAlso Me.postData.Languages.Count > 0 Then
+                ' By Default set the Caption language from the primary post language
+                attchData.CaptionLanguage = Me.postData.Languages.First
+            End If
+
             Me.postData.AddAttachment(attchData)
 
             Call Me.AddToLog($"Added file {fileName}", False)
@@ -199,6 +239,11 @@ Public Class BdiuBskyPostBuilderForm
             ' Attachment list displayed to user
             Call lstAttachments.Items.Add(fileName)
         Next
+
+        If lstAttachments.SelectedIndex = -1 And Not (Me.postData.Attachments Is Nothing OrElse Me.postData.Attachments.Count = 0) Then
+            lstAttachments.SelectedIndex = 0 ' Select first item
+        End If
+
         Call Me.RefreshCreatedAtBox()
     End Sub
 
@@ -555,6 +600,9 @@ Public Class BdiuBskyPostBuilderForm
         Call Me.SetAttachmentDimensionsData()
         Call Me.SetAltTextBoxData()
         Call Me.SetMimeTypeTextBoxData()
+        Call Me.RefreshedAnimatedFlag()
+        Call Me.RefreshAttachmentCaptionLanguage()
+        Call Me.RefreshAttachmentCaptionFile()
     End Sub
 
     Private Sub ClearAttachmentDimensionsNud()
@@ -655,7 +703,24 @@ Public Class BdiuBskyPostBuilderForm
             End If
         End If
     End Sub
+    Public Sub RefreshAttachmentCaptionFile()
+        If lstAttachments.SelectedIndex = -1 OrElse Me.postData.Attachments Is Nothing OrElse Me.postData.Attachments.Count = 0 Then
+            Me.txtCaptionPath.Text = Nothing
+        Else
+            Me.txtCaptionPath.Text = Me.postData.Attachments.Item(lstAttachments.SelectedIndex).CaptionFilePath
 
+            ' Jump to the end to directly see the filename
+            Me.txtCaptionPath.SelectionStart = txtCaptionPath.Text.Length
+            Call Me.txtCaptionPath.ScrollToCaret()
+        End If
+        If String.IsNullOrWhiteSpace(Me.txtCaptionPath.Text) Then
+            Me.txtCaptionLanguage.Enabled = False
+            Me.cboCaptionLanguage.Enabled = False
+        Else
+            Me.txtCaptionLanguage.Enabled = True
+            Me.cboCaptionLanguage.Enabled = True
+        End If
+    End Sub
     Private Sub chkQuote_CheckedChanged(sender As Object, e As EventArgs) Handles chkQuote.CheckedChanged
         Call SetReplyToOrQuoteBox()
     End Sub
@@ -671,9 +736,14 @@ Public Class BdiuBskyPostBuilderForm
         End If
     End Sub
 
-    Private Sub cboLanguageAdd_SelectedIndexChanged(sender As Object, e As EventArgs) Handles cboLanguageAdd.SelectedIndexChanged
-        If cboLanguageAdd.SelectedValue IsNot Nothing Then
-            Dim selectedVal = cboLanguageAdd.SelectedValue
+    Private Sub cboLanguage_SelectedIndexChanged(sender As Object, e As EventArgs) Handles cboLanguageAdd.SelectedIndexChanged, cboCaptionLanguage.SelectedIndexChanged
+        If TypeOf sender IsNot ComboBox Then
+            Return
+        End If
+        Dim cboSender = DirectCast(sender, ComboBox)
+
+        If cboSender.SelectedValue IsNot Nothing Then
+            Dim selectedVal = cboSender.SelectedValue
             Dim selectedBcp47 As String
 
             If TypeOf selectedVal Is Bdiu.LanguageItem Then
@@ -684,13 +754,18 @@ Public Class BdiuBskyPostBuilderForm
                 Return
             End If
 
-            If Me.postData.AddLanguage(selectedBcp47) Then
-                Call RefreshLanguageTextBox()
+            If cboSender Is cboLanguageAdd Then
+                If Me.postData.AddLanguage(selectedBcp47) Then
+                    Call RefreshPostLanguage()
+                End If
+            ElseIf cboSender Is cboCaptionLanguage Then
+                Me.postData.Attachments.Item(lstAttachments.SelectedIndex).CaptionLanguage = selectedBcp47
+                Call RefreshAttachmentCaptionLanguage()
             End If
         End If
     End Sub
 
-    Private Sub RefreshLanguageTextBox()
+    Private Sub RefreshPostLanguage()
         If Me.postData.Languages Is Nothing Then
             Me.txtLanguages.Text = Nothing
         Else
@@ -698,11 +773,27 @@ Public Class BdiuBskyPostBuilderForm
         End If
     End Sub
 
+    Private Sub RefreshAttachmentCaptionLanguage()
+        If lstAttachments.SelectedIndex = -1 OrElse Me.postData.Attachments Is Nothing OrElse Me.postData.Attachments.Count = 0 Then
+            Return
+        End If
+        RemoveHandler cboCaptionLanguage.SelectedIndexChanged, AddressOf cboLanguage_SelectedIndexChanged
+        RemoveHandler txtCaptionLanguage.Validated, AddressOf txtCaptionLanguage_Validated
+        If Me.postData.Attachments.Item(lstAttachments.SelectedIndex).CaptionLanguage Is Nothing Then
+            Me.cboCaptionLanguage.SelectedValue = String.Empty ' Set to empty string instead of null to prevent a crash
+        Else
+            Me.cboCaptionLanguage.SelectedValue = Me.postData.Attachments.Item(lstAttachments.SelectedIndex).CaptionLanguage
+        End If
+        Me.txtCaptionLanguage.Text = Me.postData.Attachments.Item(lstAttachments.SelectedIndex).CaptionLanguage
+        AddHandler cboCaptionLanguage.SelectedIndexChanged, AddressOf cboLanguage_SelectedIndexChanged
+        AddHandler txtCaptionLanguage.Validated, AddressOf txtCaptionLanguage_Validated
+    End Sub
+
     Private Sub txtLanguages_Validated(sender As Object, e As EventArgs) Handles txtLanguages.Validated
         Me.postData.ClearLanguages()
         If String.IsNullOrWhiteSpace(txtLanguages.Text) Then
             Me.postData.Languages = Nothing
-            Call RefreshLanguageTextBox()
+            Call RefreshPostLanguage()
             Return
         End If
 
@@ -714,11 +805,24 @@ Public Class BdiuBskyPostBuilderForm
             Dim cleanTag As String = token.Trim()
             Me.postData.AddLanguage(cleanTag)
         Next
-        Call RefreshLanguageTextBox()
+        Call RefreshPostLanguage()
+    End Sub
+
+    Private Sub txtCaptionLanguage_Validated(sender As Object, e As EventArgs) Handles txtCaptionLanguage.Validated
+        Me.postData.ClearLanguages()
+        If String.IsNullOrWhiteSpace(Me.txtCaptionLanguage.Text) Then
+            Me.postData.Attachments.Item(lstAttachments.SelectedIndex).CaptionLanguage = Nothing
+            Call Me.RefreshAttachmentCaptionLanguage()
+            Return
+        End If
+
+        Me.postData.Attachments.Item(lstAttachments.SelectedIndex).CaptionLanguage = Me.txtCaptionLanguage.Text.Trim()
+
+        Call Me.RefreshAttachmentCaptionLanguage()
     End Sub
 
     Public Sub RefreshCreatedAtBox()
-        If Me.btnSetCreatedAtDuringPosting.Checked Then
+        If Me.chkSetCreatedAtDuringPosting.Checked Then
             Me.postData.CreatedAt = Nothing
             Me.dtpCreatedAt.Enabled = False
             RemoveHandler dtpCreatedAt.ValueChanged, AddressOf dtpCreatedAt_ValueChanged
@@ -730,7 +834,7 @@ Public Class BdiuBskyPostBuilderForm
         Else
             RemoveHandler dtpCreatedAt.ValueChanged, AddressOf dtpCreatedAt_ValueChanged
             RemoveHandler txtCreatedAt.Validated, AddressOf txtCreatedAt_Validated
-            If Me.btnSetCreatedAtByAttachments.Checked AndAlso Me.postData.Attachments IsNot Nothing AndAlso Me.postData.Attachments.Count > 0 Then
+            If Me.chkSetCreatedAtByAttachments.Checked AndAlso Me.postData.Attachments IsNot Nothing AndAlso Me.postData.Attachments.Count > 0 Then
                 If Me.cmbSetDateFromAttachType.Text.Equals("Created", StringComparison.OrdinalIgnoreCase) Then
                     Me.postData.CreatedAt = Me.postData.GetMaxCreatedAttachmentDate
                 Else
@@ -775,22 +879,93 @@ Public Class BdiuBskyPostBuilderForm
         Call RefreshCreatedAtBox()
     End Sub
 
-    Private Sub btnSetCreatedAtDuringUpload_CheckedChanged(sender As Object, e As EventArgs) Handles btnSetCreatedAtDuringPosting.CheckedChanged
-        If Me.btnSetCreatedAtDuringPosting.Checked Then
-            Me.btnSetCreatedAtByAttachments.Checked = False
+    Private Sub chkSetCreatedAtDuringPosting_CheckedChanged(sender As Object, e As EventArgs) Handles chkSetCreatedAtDuringPosting.CheckedChanged
+        If Me.chkSetCreatedAtDuringPosting.Checked Then
+            Me.chkSetCreatedAtByAttachments.Checked = False
         End If
         Call Me.RefreshCreatedAtBox()
     End Sub
-    Private Sub btnSetCreatedAtByAttachments_CheckedChanged(sender As Object, e As EventArgs) Handles btnSetCreatedAtByAttachments.CheckedChanged
-        If Me.btnSetCreatedAtByAttachments.Checked Then
-            Me.btnSetCreatedAtDuringPosting.Checked = False
+    Private Sub chkSetCreatedAtByAttachments_CheckedChanged(sender As Object, e As EventArgs) Handles chkSetCreatedAtByAttachments.CheckedChanged
+        If Me.chkSetCreatedAtByAttachments.Checked Then
+            Me.chkSetCreatedAtDuringPosting.Checked = False
         End If
         Call Me.RefreshCreatedAtBox()
     End Sub
     Private Sub cmbSetDateFromAttachType_SelectedIndexChanged(sender As Object, e As EventArgs) Handles cmbSetDateFromAttachType.SelectedIndexChanged
-        If Me.btnSetCreatedAtByAttachments.Checked Then
+        If Me.chkSetCreatedAtByAttachments.Checked Then
             Call Me.RefreshCreatedAtBox()
         End If
+    End Sub
+
+    Private Sub chkIsAnimated_CheckedChanged(sender As Object, e As EventArgs) Handles chkIsAnimated.CheckedChanged
+        If lstAttachments.SelectedIndex = -1 OrElse Me.postData.Attachments Is Nothing OrElse Me.postData.Attachments.Count = 0 Then
+        Else
+            Me.postData.Attachments.Item(lstAttachments.SelectedIndex).IsAnimated = chkIsAnimated.Checked
+        End If
+        Call RefreshedAnimatedFlag()
+    End Sub
+
+    Private Sub RefreshedAnimatedFlag()
+        If lstAttachments.SelectedIndex = -1 OrElse Me.postData.Attachments Is Nothing OrElse Me.postData.Attachments.Count = 0 Then
+            Me.chkIsAnimated.Enabled = False
+            Me.chkAsGIF.Enabled = False
+            Me.chkIsAnimated.CheckState = CheckState.Indeterminate
+            Me.chkAsGIF.CheckState = CheckState.Indeterminate
+            Me.grpAttachmentCaptions.Enabled = False
+            Exit Sub
+        End If
+        Dim attch = Me.postData.Attachments.Item(lstAttachments.SelectedIndex)
+        Me.chkIsAnimated.Enabled = True
+        Me.chkAsGIF.Enabled = attch.IsAnimated
+        Me.grpAttachmentCaptions.Enabled = attch.IsAnimated
+        If attch.IsAnimated Then
+            Me.chkIsAnimated.CheckState = CheckState.Checked
+            If attch.PresentAsGif Then
+                Me.chkAsGIF.CheckState = CheckState.Checked
+            Else
+                Me.chkAsGIF.CheckState = CheckState.Unchecked
+            End If
+        Else
+            Me.chkIsAnimated.CheckState = CheckState.Unchecked
+            attch.PresentAsGif = False
+            Me.chkAsGIF.CheckState = CheckState.Unchecked
+        End If
+    End Sub
+
+    Private Sub chkAsGIF_CheckedChanged(sender As Object, e As EventArgs) Handles chkAsGIF.CheckedChanged
+        If lstAttachments.SelectedIndex = -1 OrElse Me.postData.Attachments Is Nothing OrElse Me.postData.Attachments.Count = 0 Then
+            Exit Sub
+        End If
+        Me.postData.Attachments.Item(lstAttachments.SelectedIndex).PresentAsGif = chkAsGIF.Checked
+        Call RefreshedAnimatedFlag()
+    End Sub
+
+    Private Sub btnClearCaption_Click(sender As Object, e As EventArgs) Handles btnClearCaption.Click
+        If lstAttachments.SelectedIndex = -1 OrElse Me.postData.Attachments Is Nothing OrElse Me.postData.Attachments.Count = 0 Then
+            Exit Sub
+        End If
+        Me.postData.Attachments.Item(lstAttachments.SelectedIndex).CaptionFilePath = Nothing
+        Call Me.RefreshAttachmentCaptionFile()
+    End Sub
+
+    Private Sub btnSelectCaption_Click(sender As Object, e As EventArgs) Handles btnSelectCaption.Click
+        If lstAttachments.SelectedIndex = -1 OrElse Me.postData.Attachments Is Nothing OrElse Me.postData.Attachments.Count = 0 Then
+            Exit Sub
+        End If
+        Dim FileDialog As New OpenFileDialog With {
+            .Filter = "Bluesky Supported Captions (*.vtt)|*.vtt|All Files (*.*)|*.*",
+            .Multiselect = False,
+            .RestoreDirectory = True,
+            .Title = "Select caption file"
+        }
+
+        Dim DummyForm As New Form() With {.TopMost = True}
+        Dim DialogResult As DialogResult = FileDialog.ShowDialog(DummyForm)
+
+        If DialogResult = DialogResult.OK Then
+            Me.postData.Attachments.Item(lstAttachments.SelectedIndex).CaptionFilePath = FileDialog.FileName
+        End If
+        Call Me.RefreshAttachmentCaptionFile()
     End Sub
 End Class
 #Enable Warning IDE1006 ' Naming Styles
