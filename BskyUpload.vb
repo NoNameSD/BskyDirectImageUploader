@@ -801,6 +801,11 @@ Namespace Bdiu
             End Sub
 
             Public Sub LoadAttachmentData()
+                Dim fileInfo As New System.IO.FileInfo(Me.FilePath)
+
+                Me.DateTimeModified = New DateTimeOffset(fileInfo.LastWriteTimeUtc)
+                Me.DateTimeCreated = New DateTimeOffset(fileInfo.CreationTime)
+
                 Dim info As New ImageMagick.MagickImageInfo(Me.FilePath)
 
                 If Me.Dimensions Is Nothing Then
@@ -815,12 +820,7 @@ Namespace Bdiu
 
                 Me.MimeType = formatInfo.MimeType
 
-                Dim fileInfo As New System.IO.FileInfo(Me.FilePath)
-
-                Me.DateTimeModified = New DateTimeOffset(fileInfo.LastWriteTimeUtc)
-                Me.DateTimeCreated = New DateTimeOffset(fileInfo.CreationTime)
-
-                ' Map MimeTypes for videos
+                ' Map MimeTypes for videos and images, which ImageMagick doesn't know the MimeType for
                 ' Magick.Net returns an empty string when reading the MimeType for videos
                 Select Case formatInfo.Format
                     Case ImageMagick.MagickFormat.Mp4
@@ -841,27 +841,45 @@ Namespace Bdiu
                     Case ImageMagick.MagickFormat.Mpg, ImageMagick.MagickFormat.Mpeg
                         Me.MimeType = "video/mpeg"
                         Me.IsAnimated = True
+                    Case ImageMagick.MagickFormat.Xcf
+                        Me.MimeType = "image/x-xcf"
+                        Me.IsAnimated = False
+                    Case ImageMagick.MagickFormat.Pct
+                        Me.MimeType = "image/x-pict"
+                        Me.IsAnimated = False
+                    Case ImageMagick.MagickFormat.Psd, ImageMagick.MagickFormat.Psb
+                        Me.MimeType = "image/vnd.adobe.photoshop"
+                        Me.IsAnimated = False
+                    Case ImageMagick.MagickFormat.Ico, ImageMagick.MagickFormat.Cur
+                        Me.MimeType = "image/x-icon"
+                        Me.IsAnimated = False
+                    Case ImageMagick.MagickFormat.Png
+
+                        If fileInfo.Extension.Equals(".ico", StringComparison.OrdinalIgnoreCase) Then
+                            ' File is actually an icon file (Contains PNG data)
+                            Me.MimeType = "image/x-icon"
+                            Me.IsAnimated = False
+                        ElseIf fileInfo.Extension.Equals(".psp", StringComparison.OrdinalIgnoreCase) Then
+                            ' File is actually a PaintShop Pro file
+                            Me.MimeType = "image/x-psp"
+                            Me.IsAnimated = False
+                        Else
+                            ' Check for APNG animation control chunk
+                            Me.IsAnimated = IsPngAnimated(fileInfo.FullName)
+                            Me.PresentAsGif = Me.IsAnimated
+                        End If
+
                     Case Else
                         ' Check if the image is animated
                         Try
-                            Select Case formatInfo.Format
-                                Case ImageMagick.MagickFormat.Png
+                            Dim frames As IEnumerable(Of ImageMagick.IMagickImageInfo) = ImageMagick.MagickImageInfo.ReadCollection(fileInfo)
 
-                                    ' Check for APNG animation control chunk
-                                    Me.IsAnimated = IsPngAnimated(fileInfo.FullName)
-
-                                Case Else
-                                    Dim frames As IEnumerable(Of ImageMagick.IMagickImageInfo) = ImageMagick.MagickImageInfo.ReadCollection(fileInfo)
-
-                                    ' Counts as animated if there is more than one frame
-                                    If frames.Count() > 1 Then
-                                        Me.IsAnimated = True
-                                    End If
-                            End Select
-
-                            If Me.IsAnimated Then
-                                Me.PresentAsGif = True
+                            ' Counts as animated if there is more than one frame
+                            If frames.Count() > 1 Then
+                                Me.IsAnimated = True
                             End If
+
+                            Me.PresentAsGif = Me.IsAnimated
 
                         Catch ex As Exception
                             ' Ignore errors

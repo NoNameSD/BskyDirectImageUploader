@@ -466,7 +466,10 @@ Public Class BdiuBskyPostBuilderForm
 
     Private Sub btnSelectAttch_Click(sender As Object, e As EventArgs) Handles btnSelectAttch.Click
         Dim FileDialog As New OpenFileDialog With {
-            .Filter = "Bluesky Supported Images (*.png;*.jpg;*.jpeg;*.jfif;*.webp;*.avif;*.svg)|*.png;*.jpg;*.jpeg;*.jfif;*.webp;*.avif,*.svg|All Files (*.*)|*.*",
+            .Filter = "Bluesky supported file types " &
+            "(*.png;*.jpe;*.jpg;*.jpeg;*.jfif;*.webp;*.avif;*.svg;*.svgz;*.jxl;*.tif;*.tiff;*.bmp;*.dib;*.rle;*.ico;*.psp;*.heic;*.heif;*.hif;*.gif;*.mp4;*.m4a;*.m4v;*.m4b;*.webm;*.mov;*.mpg;*.mpeg)" &
+            "|*.png;*.jpe;*.jpg;*.jpeg;*.jfif;*.webp;*.avif;*.svg;*.svgz;*.jxl;*.tif;*.tiff;*.bmp;*.dib;*.rle;*.ico;*.psp;*.heic;*.heif;*.hif;*.gif;*.mp4;*.m4a;*.m4v;*.m4b;*.webm;*.mov;*.mpg;*.mpeg|" &
+            "All Files (*.*)|*.*",
             .Multiselect = True,
             .RestoreDirectory = True,
             .Title = "Select 1 or more Images (Hold CTRL to select multiple)"
