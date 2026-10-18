@@ -9,7 +9,7 @@
     <NeutralLanguage>en-GB</NeutralLanguage>
     <OptionStrict>On</OptionStrict>
     <SignAssembly>false</SignAssembly>
-    <Version>0.3.0.1</Version>
+    <Version>0.3.0.2</Version>
     <AppDesignerFolder>My Project</AppDesignerFolder>
     <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
     <DebugType>embedded</DebugType>
@@ -27,7 +27,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="idunno.Bluesky" Version="7.0.1" />
+    <PackageReference Include="idunno.Bluesky" Version="8.0.0" />
     <PackageReference Include="Magick.NET-Q8-AnyCPU" Version="15.0.0" />
     <PackageReference Include="System.IdentityModel.Tokens.Jwt" Version="8.23.0" />
   </ItemGroup>

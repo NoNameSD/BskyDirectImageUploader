@@ -17,7 +17,7 @@ Namespace Bdiu
 
             ct.ThrowIfCancellationRequested()
 
-            Dim buildPost As New idunno.Bluesky.PostBuilder(text:="DummyText", langs:=Me.BskyPost.Languages, createdAt:=Me.BskyPost.CreatedAt)
+            Dim buildPost As New idunno.Bluesky.PostBuilder(text:=Nothing, langs:=Me.BskyPost.Languages, createdAt:=Me.BskyPost.CreatedAt)
 
             If Not String.IsNullOrWhiteSpace(Me.BskyPost.ReplyUrl) Then
                 RaiseEvent ProcessDataReceived(Me, "Resolving thread metadata for a native reply chain...", False)
@@ -27,9 +27,17 @@ Namespace Bdiu
                 If Me.BskyPost.ReplyIsQuote Then
                     Call buildPost.Quote(strongRef)
                 Else
-                    Dim uploadResult = Await Me.BskyMgmt.ExecuteWithAutoSave(
-                        Function() buildPost.ReplyTo(strongRef, agent, ct)
-                        )
+                    Dim replyRefResult = Await Me.BskyMgmt.ExecuteWithAutoSave(
+                            Function() agent.GetReplyReferences(strongReference:=strongRef, cancellationToken:=ct)
+                            )
+
+                    If Not replyRefResult.Succeeded Then
+                        Throw New BlueskyException("Failed getting the reply references")
+                    End If
+
+                    Dim replyRef As idunno.Bluesky.ReplyReferences = replyRefResult.Result
+
+                    Call buildPost.ReplyTo(replyRef)
                 End If
             End If
 
@@ -139,7 +147,7 @@ Namespace Bdiu
 
             ' Add the embedded images to the post builder
             If uploadedImagesList IsNot Nothing AndAlso uploadedImagesList.Count > 0 Then
-                Call buildPost.EmbedRecord(imageGalleryEmbeds)
+                Call buildPost.WithEmbed(imageGalleryEmbeds)
             End If
 
             ' Add the embedded video to the post builder
@@ -164,19 +172,21 @@ Namespace Bdiu
 #Else
                 Dim extractor = New LocalFacetExtractor(agent)
 #End If
-                Await buildPost.ExtractFacets(extractor, ct)
+                Await buildPost.ExtractFacetsAsync(extractor, ct)
 
 #If UseDefaultFacetExtractor Then
                 ' Strip off the inner metadata hash marks
                 Call RemoveHashSymbolFromTagFacets(buildPost.Facets)
 #End If
             Else
-                ' Write Dummy text data to avoid validation errors
-                ' Will be later set to an empty string and will therefore not show up in the actual post
-                Call buildPost.WithText("DummyText")
+                If Me.BskyPost.Attachments Is Nothing OrElse BskyPost.Attachments.Count = 0 Then
+                    ' Write Dummy text data to avoid validation errors
+                    ' Will be later set to an empty string and will therefore not show up in the actual post
+                    Call buildPost.WithText("DummyText")
+                End If
             End If
 
-            Dim finalPost As New idunno.Bluesky.Post(buildPost)
+                Dim finalPost As New idunno.Bluesky.Post(buildPost)
 
             ' Apply labels
             ' Only add them to the finalPost object instead of buildPost.
@@ -213,32 +223,35 @@ Namespace Bdiu
                 End Try
             End If
 
-            ' --- REFLECTION FIX FOR PURE IMAGE POSTS ---
-            ' If the text is empty, we force the underlying private field to contain 
-            ' a literal empty string "". This bypasses the SDK's validation exceptions 
-            ' and ensures the server receives the required "text" key without rendering a blank line.
-            If Me.BskyPost.Text Is Nothing OrElse Me.BskyPost.Text.Length = 0 Then
-                Try
-                    ' Retrieve all instance fields (public, private, and internal) from the Post object
-                    Dim fields As System.Reflection.FieldInfo() = finalPost.GetType().GetFields(
-            System.Reflection.BindingFlags.Instance Or
-            System.Reflection.BindingFlags.NonPublic Or
-            System.Reflection.BindingFlags.Public
-        )
+            ' Only needed if there are no embeds
+            ' idunno.Bluesky v8.0.0 allows empty text for posts with embeds
+            If Me.BskyPost.Attachments Is Nothing OrElse BskyPost.Attachments.Count = 0 Then
+                ' If the text is empty, we force the underlying private field to contain 
+                ' a literal empty string "". This bypasses the SDK's validation exceptions 
+                ' and ensures the server receives the required "text" key without rendering a blank line.
+                If Me.BskyPost.Text Is Nothing OrElse Me.BskyPost.Text.Length = 0 Then
+                    Try
+                        ' Retrieve all instance fields (public, private, and internal) from the Post object
+                        Dim fields As System.Reflection.FieldInfo() = finalPost.GetType().GetFields(
+                System.Reflection.BindingFlags.Instance Or
+                System.Reflection.BindingFlags.NonPublic Or
+                System.Reflection.BindingFlags.Public
+            )
 
-                    ' Loop through fields to find either the direct "text" field or the compiler-generated backing field
-                    For Each f In fields
-                        If f.Name.Equals("text", StringComparison.OrdinalIgnoreCase) OrElse f.Name.Contains("<Text>", StringComparison.OrdinalIgnoreCase) Then
-                            ' Directly write the empty string into memory, bypassing property setters and constructor guards
-                            f.SetValue(finalPost, "")
-                            Exit For
-                        End If
-                    Next
-                Catch ex As Exception
-                    ' Fallback strategy in case field metadata names differ across SDK versions
-                    Dim backupField = finalPost.GetType().GetField("<Text>k__BackingField", System.Reflection.BindingFlags.Instance Or System.Reflection.BindingFlags.NonPublic)
-                    backupField?.SetValue(finalPost, "")
-                End Try
+                        ' Loop through fields to find either the direct "text" field or the compiler-generated backing field
+                        For Each f In fields
+                            If f.Name.Equals("_text", StringComparison.OrdinalIgnoreCase) OrElse f.Name.Contains("<_Text>", StringComparison.OrdinalIgnoreCase) Then
+                                ' Directly write the empty string into memory, bypassing property setters and constructor guards
+                                f.SetValue(finalPost, "")
+                                Exit For
+                            End If
+                        Next
+                    Catch ex As Exception
+                        ' Fallback strategy in case field metadata names differ across SDK versions
+                        Dim backupField = finalPost.GetType().GetField("<_Text>k__BackingField", System.Reflection.BindingFlags.Instance Or System.Reflection.BindingFlags.NonPublic)
+                        backupField?.SetValue(finalPost, "")
+                    End Try
+                End If
             End If
 
             RaiseEvent ProcessDataReceived(Me, $"Sending the post data to Bluesky", False)
