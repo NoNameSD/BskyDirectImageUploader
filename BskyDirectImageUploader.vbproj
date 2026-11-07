@@ -9,7 +9,7 @@
     <NeutralLanguage>en-GB</NeutralLanguage>
     <OptionStrict>On</OptionStrict>
     <SignAssembly>false</SignAssembly>
-    <Version>0.3.0.2</Version>
+    <Version>0.3.0.3</Version>
     <AppDesignerFolder>My Project</AppDesignerFolder>
     <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
     <DebugType>embedded</DebugType>
@@ -28,7 +28,7 @@
 
   <ItemGroup>
     <PackageReference Include="idunno.Bluesky" Version="8.0.0" />
-    <PackageReference Include="Magick.NET-Q8-AnyCPU" Version="15.0.0" />
+    <PackageReference Include="Magick.NET-Q8-AnyCPU" Version="15.1.0" />
     <PackageReference Include="System.IdentityModel.Tokens.Jwt" Version="8.23.0" />
   </ItemGroup>
 
@@ -70,4 +70,156 @@
     </None>
   </ItemGroup>
 
+  <!-- Deep-scanning C# Task to extract License, Hierarchy, Author, ProjectUrl, and Version -->
+  <UsingTask TaskName="GenerateLicenseReportTask" TaskFactory="RoslynCodeTaskFactory" AssemblyFile="$(MSBuildToolsPath)\Microsoft.Build.Tasks.Core.dll">
+    <ParameterGroup>
+      <AssetsPath ParameterType="System.String" Required="true" />
+      <DirectPackages ParameterType="System.String" Required="true" />
+      <TargetDirectory ParameterType="System.String" Required="true" />
+    </ParameterGroup>
+    <Task>
+      <Using Namespace="System" />
+      <Using Namespace="System.IO" />
+      <Using Namespace="System.Collections.Generic" />
+      <Code Type="Fragment" Language="cs">
+        <![CDATA[
+        if (!File.Exists(AssetsPath)) return true;
+
+        try {
+            if (!Directory.Exists(TargetDirectory)) {
+                Directory.CreateDirectory(TargetDirectory);
+            }
+            string outputPath = Path.Combine(TargetDirectory, "GeneratedLicenses.txt");
+
+            var directSet = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            if (!string.IsNullOrEmpty(DirectPackages)) {
+                foreach (var p in DirectPackages.Split(';')) {
+                    if (!string.IsNullOrEmpty(p)) directSet.Add(p.Trim());
+                }
+            }
+
+            var lines = new List<string>();
+            var processed = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            
+            string globalNuGetPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".nuget", "packages");
+            string assetsContent = File.ReadAllText(AssetsPath);
+            int folderIdx = assetsContent.IndexOf("\"packageFolders\":");
+            if (folderIdx != -1) {
+                int pathStart = assetsContent.IndexOf("\"", folderIdx + 17);
+                int pathEnd = assetsContent.IndexOf("\"", pathStart + 1);
+                if (pathStart != -1 && pathEnd != -1) {
+                    string extractedPath = assetsContent.Substring(pathStart + 1, pathEnd - pathStart - 1).Replace("\\\\", "\\");
+                    if (Directory.Exists(extractedPath)) globalNuGetPath = extractedPath;
+                }
+            }
+
+            using (var reader = new StreamReader(AssetsPath)) {
+                string line;
+                bool inLibraries = false;
+
+                while ((line = reader.ReadLine()) != null) {
+                    if (line.Contains("\"libraries\": {")) { inLibraries = true; continue; }
+                    if (inLibraries && line.StartsWith("  }")) { break; }
+
+                    if (inLibraries && line.StartsWith("    \"") && line.Contains("/") && line.EndsWith("{")) {
+                        string trimmed = line.Trim();
+                        string[] parts = trimmed.Split('"');
+                        if (parts.Length > 1) {
+                            string rawKey = parts[1]; // FIXED: Extract string from array index correctly
+                            string[] keyParts = rawKey.Split('/');
+                            
+                            if (keyParts.Length >= 2) {
+                                string pkgName = keyParts[0];
+                                string pkgVersion = keyParts[1];
+
+                                if (!processed.Contains(pkgName)) {
+                                    string licName = "Unknown";
+                                    string copyrightHolder = "the package authors";
+                                    string projectUrl = "No Project URL specified";
+
+                                    string lowerName = pkgName.ToLower();
+                                    string nuspecPath = Path.Combine(globalNuGetPath, lowerName, pkgVersion, lowerName + ".nuspec");
+
+                                    if (File.Exists(nuspecPath)) {
+                                        string nuspecText = File.ReadAllText(nuspecPath);
+
+                                        // A. Extract <authors>
+                                        int authorTag = nuspecText.IndexOf("<authors>");
+                                        if (authorTag != -1) {
+                                            int endAuthor = nuspecText.IndexOf("</authors>", authorTag);
+                                            if (endAuthor != -1) {
+                                                string extractedAuthor = nuspecText.Substring(authorTag + 9, endAuthor - authorTag - 9).Trim();
+                                                if (!string.IsNullOrEmpty(extractedAuthor)) copyrightHolder = extractedAuthor;
+                                            }
+                                        }
+                                        
+                                        // B. Extract <projectUrl>
+                                        int urlTag = nuspecText.IndexOf("<projectUrl>");
+                                        if (urlTag != -1) {
+                                            int endUrl = nuspecText.IndexOf("</projectUrl>", urlTag);
+                                            if (endUrl != -1) {
+                                                string url = nuspecText.Substring(urlTag + 12, endUrl - urlTag - 12).Trim();
+                                                if (!string.IsNullOrEmpty(url)) projectUrl = url;
+                                            }
+                                        }
+
+                                        // C. Extract <license> node content
+                                        int licTag = nuspecText.IndexOf("<license ");
+                                        if (licTag != -1) {
+                                            int closeTag = nuspecText.IndexOf(">", licTag);
+                                            int endTag = nuspecText.IndexOf("</license>", closeTag);
+                                            if (closeTag != -1 && endTag != -1) {
+                                                licName = nuspecText.Substring(closeTag + 1, endTag - closeTag - 1).Trim();
+                                            }
+                                        }
+                                        
+                                        if (licName == "Unknown" || string.IsNullOrEmpty(licName)) {
+                                            int urlTagLic = nuspecText.IndexOf("<licenseUrl>");
+                                            if (urlTagLic != -1) {
+                                                int endUrlLic = nuspecText.IndexOf("</licenseUrl>", urlTagLic);
+                                                if (endUrlLic != -1) {
+                                                    string urlLic = nuspecText.Substring(urlTagLic + 12, endUrlLic - urlTagLic - 12).Trim();
+                                                    if (urlLic.Contains("mit-license.org") || urlLic.Contains("/MIT")) licName = "MIT";
+                                                    else if (urlLic.Contains("apache.org/licenses/LICENSE-2.0")) licName = "Apache-2.0";
+                                                    else licName = urlLic;
+                                                }
+                                            }
+                                        }
+                                    }
+
+                                    string depType = directSet.Contains(pkgName) ? "Top-Level" : "Transitive";
+                                    
+                                    // Serialize row with exactly 6 elements
+                                    lines.Add(string.Format("{0} | {1} | {2} | {3} | {4} | {5}", 
+                                        pkgName, licName, depType, copyrightHolder, projectUrl, pkgVersion));
+                                    processed.Add(pkgName);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            File.WriteAllLines(outputPath, lines, System.Text.Encoding.UTF8);
+        }
+        catch (Exception ex) {
+            Log.LogError("License Cache Nuspec Scan Failed: " + ex.Message);
+        }
+        ]]>
+      </Code>
+    </Task>
+  </UsingTask>
+
+  <!-- Generates the file inside the Project Directory during compilation -->
+  <Target Name="GenerateLicenseReport" BeforeTargets="BeforeBuild">
+    <GenerateLicenseReportTask
+      AssetsPath="$(ProjectDir)obj\project.assets.json"
+      DirectPackages="@(PackageReference)"
+      TargetDirectory="$(ProjectDir)" />
+
+    <!-- Dynamically injects the newly created file as an Embedded Resource into the assembly compiler -->
+    <ItemGroup>
+      <EmbeddedResource Include="$(ProjectDir)GeneratedLicenses.txt" LogicalName="CompileTimeLicenses.txt" />
+    </ItemGroup>
+  </Target>
 </Project>

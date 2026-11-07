@@ -426,6 +426,9 @@ FodyWeavers.xsd
 # JetBrains Rider
 *.sln.iml
 
+# Automated NuGet License-Report
+GeneratedLicenses.*
+
 #Ignore Unused Resources
 Resources/Unused
 /Icons/GitIgnore
